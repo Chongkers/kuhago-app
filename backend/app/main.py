@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes import events
+from app.routes import coverage, events
 from ml import clip_engine
 
 
@@ -21,3 +21,4 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(events.router)
+app.include_router(coverage.router)

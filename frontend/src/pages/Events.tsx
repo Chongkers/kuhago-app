@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { createEvent, missedMoments, STATUSES, useEvents, type EventView } from '../api/data'
-import { Badge, ModeToggle, Notice, Page, Thumb } from '../components/ui'
+import { Badge, ModeToggle, Notice, Thumb } from '../components/ui'
+import { Page } from '../components/Shell'
 import { count, formatDate, peso, todayISO } from '../lib/format'
 import { useMode } from '../lib/mode'
+import { useProfiles } from '../lib/profile'
 import { btnPrimary, card, input, panel } from '../lib/styles'
 import { TEMPLATES } from '../lib/templates'
 import { term, type Mode } from '../lib/terms'
@@ -15,13 +17,18 @@ function NewEventPanel({ mode, eventType, onPick }: { mode: Mode; eventType: str
   const [client, setClient] = useState('')
   const [date, setDate] = useState(todayISO)
   const { error, run } = useAction()
+  const { claimEvent } = useProfiles()
   const pro = mode === 'pro'
 
   function submit(e: FormEvent) {
     e.preventDefault()
     if (!eventType || !name.trim()) return
     const input = { mode, name: name.trim(), eventType, date, ...(pro ? { client: client.trim() } : {}) }
-    run(async () => navigate(`/events/${await createEvent(input)}`))
+    run(async () => {
+      const id = await createEvent(input)
+      claimEvent(id)
+      navigate(`/events/${id}`)
+    })
   }
 
   return (

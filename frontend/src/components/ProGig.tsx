@@ -16,7 +16,9 @@ import { rollLabel, term } from '../lib/terms'
 import { useAction } from '../lib/useAction'
 import CoverageCard from './CoverageCard'
 import OrganizeCard from './OrganizeCard'
-import { Badge, ImagePicker, Notice, Page, Thumb } from './ui'
+import OwlCard from './OwlChat'
+import { Badge, ImagePicker, Notice, Thumb } from './ui'
+import { Page } from './Shell'
 
 export const SIDECAR_OPTIONS: { mode: SidecarMode; label: string; example: string }[] = [
   { mode: 'lightroom', label: 'Lightroom Classic', example: 'IMG_0001.xmp' },
@@ -111,6 +113,14 @@ export default function ProGig({ event }: { event: EventView }) {
   return (
     <Page
       pro
+      center={
+        <p className="text-sm text-neutral-600">
+          <Link to="/" className="hover:text-neutral-950">
+            Gigs
+          </Link>{' '}
+          / {event.name}
+        </p>
+      }
       right={
         <>
           <Link to={`/events/${event.id}/finals`} className={btnSecondary}>
@@ -204,6 +214,7 @@ export default function ProGig({ event }: { event: EventView }) {
 
         <aside className="space-y-4">
           <CoverageCard event={event} />
+          <OwlCard event={event} />
           <XmpPanel event={event} />
         </aside>
       </div>

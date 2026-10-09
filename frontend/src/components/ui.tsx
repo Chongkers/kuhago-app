@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
-import { Link, NavLink, useMatch, useNavigate } from 'react-router-dom'
-import { useEvent, useStatus, type Thumb as ThumbData } from '../api/data'
+import { useNavigate } from 'react-router-dom'
+import type { Thumb as ThumbData } from '../api/data'
 import { useMode } from '../lib/mode'
-import { term, type Mode } from '../lib/terms'
+import { initials } from '../lib/profile'
+import type { Mode } from '../lib/terms'
 
 export function Owl({ className = 'h-7 w-7' }: { className?: string }) {
   return (
@@ -24,88 +25,6 @@ export function Owl({ className = 'h-7 w-7' }: { className?: string }) {
         strokeLinejoin="round"
       />
     </svg>
-  )
-}
-
-type PageProps = {
-  pro?: boolean
-  center?: ReactNode
-  right?: ReactNode
-  width?: string
-  children: ReactNode
-}
-
-const navLink = ({ isActive }: { isActive: boolean }) =>
-  `rounded-lg px-3 py-1.5 text-sm ${isActive ? 'bg-neutral-100 font-semibold text-neutral-950' : 'text-neutral-600 hover:text-neutral-950'}`
-
-// Left sidebar on wide screens, a wrapping top bar on phones.
-function Nav({ pro }: { pro?: boolean }) {
-  const { mode: chosen } = useMode()
-  const eventId = useMatch('/events/:eventId/*')?.params.eventId
-  const event = useEvent(Number(eventId))
-  const mode = event?.mode ?? chosen
-  const base = event && `/events/${event.id}`
-
-  return (
-    <nav
-      aria-label="Main"
-      className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-neutral-200 bg-white px-4 py-3 md:sticky md:top-0 md:h-screen md:w-56 md:shrink-0 md:flex-col md:flex-nowrap md:items-stretch md:gap-1 md:border-r md:border-b-0 md:py-6"
-    >
-      <Link to="/" className="mr-4 flex items-center gap-2.5 md:mr-0 md:mb-6 md:px-3">
-        <Owl />
-        <span className="font-display text-xl font-bold tracking-tight">KuhaGo</span>
-        {pro && <Badge variant="outline">PRO</Badge>}
-      </Link>
-      {mode && (
-        <>
-          <NavLink to="/" end className={navLink}>
-            {term('events', mode)}
-          </NavLink>
-          {base && (
-            <div className="flex flex-wrap gap-x-2 md:ml-3 md:flex-col md:gap-1 md:border-l md:border-neutral-200 md:pl-2">
-              <NavLink to={base} end className={navLink}>
-                {term('overview', mode)}
-              </NavLink>
-              <NavLink to={`${base}/export`} className={navLink}>
-                {term('export', mode)}
-              </NavLink>
-              <NavLink to={`${base}/owl`} className={navLink}>
-                {term('owl', mode)}
-              </NavLink>
-              {mode === 'pro' && (
-                <NavLink to={`${base}/finals`} className={navLink}>
-                  {term('finals', mode)}
-                </NavLink>
-              )}
-            </div>
-          )}
-          <NavLink to="/settings" className={navLink}>
-            {term('settings', mode)}
-          </NavLink>
-        </>
-      )}
-    </nav>
-  )
-}
-
-export function Page({ pro, center, right, width = 'max-w-6xl', children }: PageProps) {
-  const { error } = useStatus()
-  return (
-    <div className="flex min-h-screen flex-col md:flex-row">
-      <Nav pro={pro} />
-      <div className="flex min-w-0 flex-1 flex-col">
-        {(center || right) && (
-          <header className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-neutral-200 bg-white px-4 py-3 sm:px-8">
-            <div className="w-full sm:w-auto sm:flex-1">{center}</div>
-            <div className="ml-auto flex items-center gap-3 text-sm text-neutral-600">{right}</div>
-          </header>
-        )}
-        <main className={`mx-auto w-full flex-1 px-4 py-10 sm:px-8 ${width}`}>{children}</main>
-        <footer className="px-4 py-4 text-center text-xs text-neutral-500 sm:px-8">
-          {error ?? 'Everything stays on this laptop. Your originals are never moved or changed.'}
-        </footer>
-      </div>
-    </div>
   )
 }
 
@@ -212,13 +131,13 @@ export function Notice({ children }: { children: ReactNode }) {
   )
 }
 
-export function NotFound() {
+export function Avatar({ name, className = 'h-9 w-9 text-sm' }: { name: string; className?: string }) {
   return (
-    <Page>
-      <h1 className="text-2xl font-bold">Not found</h1>
-      <Link to="/" className="mt-2 inline-block text-sm underline">
-        Back to the list
-      </Link>
-    </Page>
+    <span
+      aria-hidden="true"
+      className={`grid shrink-0 place-items-center rounded-full bg-neutral-950 font-display font-bold text-white ${className}`}
+    >
+      {initials(name)}
+    </span>
   )
 }

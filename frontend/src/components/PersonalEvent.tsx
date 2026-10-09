@@ -8,7 +8,9 @@ import { rollLabel, term } from '../lib/terms'
 import { useAction } from '../lib/useAction'
 import CoverageCard from './CoverageCard'
 import OrganizeCard from './OrganizeCard'
-import { ImagePicker, Notice, Owl, Page, Thumb } from './ui'
+import OwlCard from './OwlChat'
+import { ImagePicker, Notice, Owl, Thumb } from './ui'
+import { Page } from './Shell'
 
 type Tab = 'moments' | 'highlights' | 'clips' | 'unsorted'
 
@@ -189,6 +191,7 @@ export default function PersonalEvent({ event }: { event: EventView }) {
 
         <aside className="space-y-4">
           <CoverageCard event={event} />
+          <OwlCard event={event} />
           <div className={`${panel} flex gap-3 p-4`}>
             <Owl className="h-8 w-8 shrink-0" />
             <div>

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'rea
 import { useParams } from 'react-router-dom'
 import { api, type ChatMessage, type OwlStatus } from '../api/client'
 import { useEvent } from '../api/data'
-import { Badge, NotFound, Notice, Owl, Page } from '../components/ui'
+import { Badge, Notice, Owl } from '../components/ui'
+import { NotFound, Page } from '../components/Shell'
 import { btnPrimary, card, input, panel } from '../lib/styles'
 import { term } from '../lib/terms'
 

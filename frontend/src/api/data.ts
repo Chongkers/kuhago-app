@@ -4,6 +4,7 @@
 
 import { useSyncExternalStore } from 'react'
 import { basename, finalsView, type FinalsView, type Thumb } from '../lib/finals'
+import { useProfiles } from '../lib/profile'
 import type { Mode } from '../lib/terms'
 import { api, watchJob, type EventStatus, type ExportPlan, type KuhaEvent, type Media } from './client'
 
@@ -184,12 +185,15 @@ export function useStatus(): { loaded: boolean; error: string | null } {
   return { loaded, error }
 }
 
+// Each profile only sees the events it created (see ownsEvent in lib/profile).
 export function useEvents(mode: Mode): EventView[] {
-  return useStore().events.filter((e) => e.mode === mode)
+  const { ownsEvent } = useProfiles()
+  return useStore().events.filter((e) => e.mode === mode && ownsEvent(e.id))
 }
 
 export function useEvent(id: number): EventView | undefined {
-  return useStore().events.find((e) => e.id === id)
+  const { ownsEvent } = useProfiles()
+  return useStore().events.find((e) => e.id === id && ownsEvent(e.id))
 }
 
 export function useFinals(eventId: number): FinalsView | undefined {
@@ -261,7 +265,7 @@ export async function startIngest(eventId: number, folders: string[]): Promise<v
   }
 }
 
-export async function searchMedia(eventId: number, query: string): Promise<Thumb[]> {
+export async function searchMedia(eventId: number | undefined, query: string): Promise<Thumb[]> {
   return (await api.search(query, eventId)).map(thumb)
 }
 
@@ -287,6 +291,19 @@ export async function scanFinals(eventId: number, folder: string): Promise<void>
   const { job_id } = await api.matchFinals(eventId, folder)
   await waitForJob(job_id, 'Matching')
   await loadFinals(eventId, folder)
+}
+
+// Settings actions that need the engine.
+export const askOwl = (_eventId: number | undefined, _prompt: string) => notConnected()
+export const testOllama = (_url: string) => notConnected()
+export const moveLibrary = (_folder: string) => notConnected()
+export const clearPreviewCache = () => notConnected()
+export const clearOwlHistory = () => notConnected()
+
+export const NOT_CONNECTED = "KuhaGo's engine can't do this yet."
+
+function notConnected(): Promise<never> {
+  return Promise.reject(new Error(NOT_CONNECTED))
 }
 
 export const loadExportPlan = (eventId: number): Promise<ExportPlan> => api.exportPlan(eventId)

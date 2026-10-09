@@ -2,7 +2,7 @@ import { useParams } from 'react-router-dom'
 import { useEvent } from '../api/data'
 import PersonalEvent from '../components/PersonalEvent'
 import ProGig from '../components/ProGig'
-import { NotFound } from '../components/ui'
+import { NotFound } from '../components/Shell'
 
 // The layout follows the event's own mode, not the app-wide one.
 export default function EventDetail() {

@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom'
 import { rescanFinals, useEvent, useFinals } from '../api/data'
-import { Badge, NotFound, Notice, Page, Thumb } from '../components/ui'
+import { Badge, Notice, Thumb } from '../components/ui'
+import { NotFound, Page } from '../components/Shell'
 import { backLink, btnSecondary, card, panel } from '../lib/styles'
 import { useAction } from '../lib/useAction'
 

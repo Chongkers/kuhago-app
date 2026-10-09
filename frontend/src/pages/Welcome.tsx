@@ -1,5 +1,7 @@
-import { Owl, Page } from '../components/ui'
+import { Owl } from '../components/ui'
+import { BarePage } from '../components/Shell'
 import { useMode } from '../lib/mode'
+import { useProfiles } from '../lib/profile'
 import { btnPrimary, btnSecondary } from '../lib/styles'
 import type { Mode } from '../lib/terms'
 
@@ -24,9 +26,19 @@ const CHOICES: { mode: Mode; kicker: string; title: string; body: string; cta: s
 
 export default function Welcome() {
   const { setMode } = useMode()
+  const { logout } = useProfiles()
 
   return (
-    <Page width="max-w-4xl" right="Offline · nothing leaves your laptop">
+    <BarePage
+      right={
+        <>
+          <span>Offline · nothing leaves your laptop</span>
+          <button type="button" onClick={logout} className="font-display font-semibold text-neutral-950 underline">
+            Switch profile
+          </button>
+        </>
+      }
+    >
       <div className="flex flex-col items-center pt-8 text-center">
         <Owl className="h-24 w-24" />
         <h1 className="mt-6 text-5xl font-extrabold tracking-tight sm:text-6xl">Every moment, sorted.</h1>
@@ -48,6 +60,6 @@ export default function Welcome() {
         ))}
       </div>
       <p className="mt-10 text-center text-sm text-neutral-600">You can switch modes any time in Settings.</p>
-    </Page>
+    </BarePage>
   )
 }

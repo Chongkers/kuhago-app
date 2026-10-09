@@ -1,5 +1,6 @@
 """Multi-folder photo ingest as a background job (AGENTS.md Agent 1). Originals are only read."""
 import logging
+from datetime import datetime
 from contextlib import closing
 from pathlib import Path
 
@@ -9,7 +10,7 @@ from pydantic import BaseModel
 
 from app import config, db, jobs
 from media.previews import make_preview
-from ml import clip_engine
+from ml import clip_engine, highlights
 from ml.classifier import classify_moments
 
 log = logging.getLogger(__name__)
@@ -86,3 +87,34 @@ def _ingest(report, event_id: int, folders: list[Path]) -> None:
             ],
         )
     report("classifying", len(ok), len(ok))
+    with closing(db.connect()) as con, con:
+        _curate(report, con, event_id)
+
+
+def _curate(report, con, event_id: int) -> None:
+    """Sharpness for new photos, then duplicate groups + highlights over the whole event (a new folder can
+    hold bursts of moments already ingested)."""
+    rows = con.execute(
+        "SELECT id, preview_path, emb_index, taken_at, moment, sharpness FROM media"
+        " WHERE event_id = ? AND kind = 'photo' ORDER BY id",
+        (event_id,),
+    ).fetchall()
+    sharp, hashes = [], []
+    for i, r in enumerate(rows, 1):
+        try:
+            s = r["sharpness"] if r["sharpness"] is not None else highlights.sharpness(Path(r["preview_path"]))
+            h = highlights.phash(Path(r["preview_path"]))  # ponytail: rehashed every ingest, store it if events get huge
+        except Exception as e:
+            log.warning("skip curation of %s: %s", r["preview_path"], e)
+            s, h = 0.0, None  # unreadable preview: never a highlight, only CLIP can group it
+        sharp.append(s)
+        hashes.append(h)
+        report("highlights", i, len(rows))
+    moments = [r["moment"] for r in rows]
+    taken = [datetime.fromisoformat(r["taken_at"]).timestamp() if r["taken_at"] else 0.0 for r in rows]
+    groups = highlights.group_duplicates(moments, taken, hashes, db.load_embeddings(event_id)[[r["emb_index"] for r in rows]])
+    picks = highlights.pick_highlights(moments, highlights.percentile_rank(sharp), groups)
+    con.executemany(
+        "UPDATE media SET sharpness = ?, dup_group = ?, is_highlight = ? WHERE id = ?",
+        [(s, None if g is None else rows[g]["id"], int(p), r["id"]) for r, s, g, p in zip(rows, sharp, groups, picks)],
+    )

@@ -113,7 +113,6 @@ export const api = {
   previewUrl: (mediaId: number) => `${API_BASE}/media/${mediaId}/preview`,
 
   coverage: (eventId: number) => request<CoverageItem[]>(`/events/${eventId}/coverage`),
-  highlights: (eventId: number) => request<Media[]>(`/events/${eventId}/highlights`),
   search: (q: string, eventId?: number) => request<Media[]>(`/search${query({ q, event_id: eventId })}`),
 
   exportPlan: (eventId: number) => request<ExportPlan>(`/events/${eventId}/export`, json('POST', { dry_run: true })),

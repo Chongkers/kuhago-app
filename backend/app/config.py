@@ -28,6 +28,13 @@ UNSORTED = "Unsorted"
 TAU_COV = 0.22
 COVERAGE_CANDIDATES = 3
 
+# Highlights + burst duplicates
+DUP_MAX_SECONDS = 10
+DUP_PHASH_MAX = 8      # pHash Hamming distance (of 64 bits)
+DUP_COS_MIN = 0.95
+SHARPNESS_MIN_PCT = 20  # percentile rank within the event; below = too blurry for highlights
+HIGHLIGHTS_PER_MOMENT = 5
+
 # Previews
 PREVIEW_MAX_PX = 1024
 PREVIEW_JPEG_QUALITY = 85

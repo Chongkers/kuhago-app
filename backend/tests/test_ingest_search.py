@@ -88,6 +88,10 @@ def test_ingest_two_folders_skips_bad_files_then_search(tmp_path):
     ]
     assert [m["moment"] for m in client.get(f"/events/{ev}/media", params={"moment": "Cake"}).json()] == ["Cake", "Cake"]
     assert client.get(f"/media/{media[0]['id']}/preview").headers["content-type"] == "image/jpeg"
+    cakes = [m for m in media if m["moment"] == "Cake"]
+    assert cakes[0]["dup_group"] == cakes[1]["dup_group"] == min(m["id"] for m in cakes)  # same look, seconds apart
+    best = client.get(f"/events/{ev}/media", params={"highlights": True}).json()
+    assert sorted(m["moment"] for m in best) == ["Cake", "Group Photo"]  # one per duplicate group
 
     # Re-ingesting the same folder adds nothing.
     assert _ingest(client, ev, [a])[-1]["stage"] == "done"

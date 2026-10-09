@@ -99,8 +99,7 @@ async function loadEvent(e: KuhaEvent): Promise<EventView> {
     }
   })
   const unsorted = byMoment.get(UNSORTED) ?? []
-  // ponytail: first photo per moment until the highlights endpoint (sharpness + duplicates) lands
-  const highlights = moments.filter((m) => m.thumbs.length > 0).map((m) => ({ moment: m.moment, thumb: m.thumbs[0] }))
+  const highlights = media.filter((m) => m.is_highlight).map((m) => ({ moment: m.moment, thumb: thumb(m) }))
   return {
     id: e.id,
     mode: e.mode,

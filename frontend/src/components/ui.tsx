@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useStatus, type Thumb as ThumbData } from '../api/data'
+import { Link, NavLink, useMatch, useNavigate } from 'react-router-dom'
+import { useEvent, useStatus, type Thumb as ThumbData } from '../api/data'
 import { useMode } from '../lib/mode'
-import type { Mode } from '../lib/terms'
+import { term, type Mode } from '../lib/terms'
 
 export function Owl({ className = 'h-7 w-7' }: { className?: string }) {
   return (
@@ -35,25 +35,76 @@ type PageProps = {
   children: ReactNode
 }
 
+const navLink = ({ isActive }: { isActive: boolean }) =>
+  `rounded-lg px-3 py-1.5 text-sm ${isActive ? 'bg-neutral-100 font-semibold text-neutral-950' : 'text-neutral-600 hover:text-neutral-950'}`
+
+// Left sidebar on wide screens, a wrapping top bar on phones.
+function Nav({ pro }: { pro?: boolean }) {
+  const { mode: chosen } = useMode()
+  const eventId = useMatch('/events/:eventId/*')?.params.eventId
+  const event = useEvent(Number(eventId))
+  const mode = event?.mode ?? chosen
+  const base = event && `/events/${event.id}`
+
+  return (
+    <nav
+      aria-label="Main"
+      className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-neutral-200 bg-white px-4 py-3 md:sticky md:top-0 md:h-screen md:w-56 md:shrink-0 md:flex-col md:flex-nowrap md:items-stretch md:gap-1 md:border-r md:border-b-0 md:py-6"
+    >
+      <Link to="/" className="mr-4 flex items-center gap-2.5 md:mr-0 md:mb-6 md:px-3">
+        <Owl />
+        <span className="font-display text-xl font-bold tracking-tight">KuhaGo</span>
+        {pro && <Badge variant="outline">PRO</Badge>}
+      </Link>
+      {mode && (
+        <>
+          <NavLink to="/" end className={navLink}>
+            {term('events', mode)}
+          </NavLink>
+          {base && (
+            <div className="flex flex-wrap gap-x-2 md:ml-3 md:flex-col md:gap-1 md:border-l md:border-neutral-200 md:pl-2">
+              <NavLink to={base} end className={navLink}>
+                {term('overview', mode)}
+              </NavLink>
+              <NavLink to={`${base}/export`} className={navLink}>
+                {term('export', mode)}
+              </NavLink>
+              <NavLink to={`${base}/owl`} className={navLink}>
+                {term('owl', mode)}
+              </NavLink>
+              {mode === 'pro' && (
+                <NavLink to={`${base}/finals`} className={navLink}>
+                  {term('finals', mode)}
+                </NavLink>
+              )}
+            </div>
+          )}
+          <NavLink to="/settings" className={navLink}>
+            {term('settings', mode)}
+          </NavLink>
+        </>
+      )}
+    </nav>
+  )
+}
+
 export function Page({ pro, center, right, width = 'max-w-6xl', children }: PageProps) {
   const { error } = useStatus()
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="border-b border-neutral-200 bg-white">
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-4 py-4 sm:px-8">
-          <Link to="/" className="flex items-center gap-2.5">
-            <Owl />
-            <span className="font-display text-xl font-bold tracking-tight">KuhaGo</span>
-            {pro && <Badge variant="outline">PRO</Badge>}
-          </Link>
-          <div className="order-last w-full sm:order-none sm:w-auto sm:flex-1">{center}</div>
-          <div className="ml-auto flex items-center gap-3 text-sm text-neutral-600">{right}</div>
-        </div>
-      </header>
-      <main className={`mx-auto w-full flex-1 px-4 py-10 sm:px-8 ${width}`}>{children}</main>
-      <footer className="px-4 py-4 text-center text-xs text-neutral-500 sm:px-8">
-        {error ?? 'Everything stays on this laptop. Your originals are never moved or changed.'}
-      </footer>
+    <div className="flex min-h-screen flex-col md:flex-row">
+      <Nav pro={pro} />
+      <div className="flex min-w-0 flex-1 flex-col">
+        {(center || right) && (
+          <header className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-neutral-200 bg-white px-4 py-3 sm:px-8">
+            <div className="w-full sm:w-auto sm:flex-1">{center}</div>
+            <div className="ml-auto flex items-center gap-3 text-sm text-neutral-600">{right}</div>
+          </header>
+        )}
+        <main className={`mx-auto w-full flex-1 px-4 py-10 sm:px-8 ${width}`}>{children}</main>
+        <footer className="px-4 py-4 text-center text-xs text-neutral-500 sm:px-8">
+          {error ?? 'Everything stays on this laptop. Your originals are never moved or changed.'}
+        </footer>
+      </div>
     </div>
   )
 }
@@ -77,6 +128,34 @@ const TONES = ['bg-neutral-200', 'bg-neutral-300', 'bg-neutral-300/70', 'bg-neut
 export function Thumb({ thumb, className = '' }: { thumb?: ThumbData; className?: string }) {
   if (thumb?.src) return <img src={thumb.src} alt="" loading="lazy" className={`object-cover ${className}`} />
   return <div className={`${TONES[(thumb?.tone ?? 0) % TONES.length]} ${className}`} />
+}
+
+// A button-looking label around a hidden image file input; the input keeps keyboard focus.
+export function ImagePicker({
+  className = '',
+  onFiles,
+  children,
+}: {
+  className?: string
+  onFiles: (files: File[]) => void
+  children: ReactNode
+}) {
+  return (
+    <label className={`cursor-pointer focus-within:ring-2 focus-within:ring-neutral-950 ${className}`}>
+      {children}
+      <input
+        type="file"
+        accept="image/*"
+        multiple
+        className="sr-only"
+        onChange={(e) => {
+          const files = [...(e.target.files ?? [])]
+          e.target.value = '' // picking the same files again still fires
+          if (files.length > 0) onFiles(files)
+        }}
+      />
+    </label>
+  )
 }
 
 export function ProgressBar({ done, total }: { done: number; total: number }) {

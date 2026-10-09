@@ -64,6 +64,12 @@ XMP_BACKUP_DIR = ".kuha_backup"
 XMP_ROOT_KEYWORD = "Kuha"
 EXIFTOOL_TIMEOUT = 300  # seconds per batched call
 
+# Ask the owl: Ollama on this machine only, never a remote host
+OLLAMA_URL = "http://127.0.0.1:11434"
+OLLAMA_MODEL = "llama3.2:3b"  # used when the page doesn't pick an installed one
+OLLAMA_TIMEOUT = 120  # seconds; a small model on CPU can be slow to answer
+OLLAMA_STATUS_TIMEOUT = 3  # seconds; "is it running?" should never hang the page
+
 # Ingest
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp"}
 RAW_EXTS = {".cr2", ".cr3", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2"}

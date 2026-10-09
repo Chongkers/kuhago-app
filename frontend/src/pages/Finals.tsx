@@ -1,7 +1,8 @@
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { rescanFinals, useEvent, useFinals } from '../api/data'
+import { loadFinals, scanFinals, useEvent, useFinals } from '../api/data'
 import { Badge, NotFound, Notice, Page, Thumb } from '../components/ui'
-import { backLink, btnSecondary, card, panel } from '../lib/styles'
+import { backLink, btnSecondary, card, input, panel } from '../lib/styles'
 import { useAction } from '../lib/useAction'
 
 const SELECT_MIN_RATING = 3
@@ -12,6 +13,21 @@ export default function Finals() {
   const event = useEvent(Number(eventId))
   const finals = useFinals(Number(eventId))
   const { error, run } = useAction()
+  const [folder, setFolder] = useState('')
+  const [scanning, setScanning] = useState(false)
+  const isPro = event?.mode === 'pro'
+
+  // the last scan's result, if the engine has one
+  useEffect(() => {
+    if (isPro) loadFinals(Number(eventId)).catch(() => undefined)
+  }, [eventId, isPro])
+
+  function submit(e: FormEvent) {
+    e.preventDefault()
+    if (!folder.trim() || !event) return
+    setScanning(true)
+    run(() => scanFinals(event.id, folder.trim()).finally(() => setScanning(false)))
+  }
 
   if (!event || event.mode !== 'pro') return <NotFound />
 
@@ -34,7 +50,7 @@ export default function Finals() {
           <h1 className="text-3xl font-bold tracking-tight">Selects vs finals</h1>
           <p className="mt-1 text-sm text-neutral-600">
             Selects = RAWs rated {SELECT_MIN_RATING}★ or more
-            {finals && (
+            {finals?.folder && (
               <>
                 {' '}
                 · finals folder <span className="font-mono">{finals.folder}</span>
@@ -42,12 +58,21 @@ export default function Finals() {
             )}
           </p>
         </div>
-        <div className="text-right">
-          <button type="button" className={btnSecondary} onClick={() => run(() => rescanFinals(event.id))}>
-            {finals ? 'Re-scan finals' : 'Scan finals folder'}
-          </button>
+        <form onSubmit={submit} className="w-full max-w-md">
+          <div className="flex gap-2">
+            <input
+              value={folder}
+              onChange={(e) => setFolder(e.target.value)}
+              placeholder="X:\\Gigs\\Finals"
+              aria-label="Finals folder"
+              className={`${input} font-mono`}
+            />
+            <button type="submit" disabled={scanning} className={`${btnSecondary} shrink-0`}>
+              {scanning ? 'Scanning…' : finals ? 'Re-scan finals' : 'Scan finals folder'}
+            </button>
+          </div>
           <Notice>{error}</Notice>
-        </div>
+        </form>
       </div>
 
       {!finals ? (
@@ -119,7 +144,7 @@ export default function Finals() {
                     <td className="px-4 py-2.5 font-mono text-xs">{row.final}</td>
                     <td className="px-4 py-2.5 font-mono text-xs">{row.raw}</td>
                     <td className="px-4 py-2.5 text-neutral-600">{row.moment}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-xs text-neutral-600">Δ{row.hamming}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-xs text-neutral-600">{row.score.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>

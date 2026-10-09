@@ -1,17 +1,18 @@
 // View data for the pages. Pages only import hooks and actions from here.
 //
-// A small store backed by the local engine (./client.ts). Actions the engine can't do yet
-// reject with NOT_CONNECTED so the UI shows their failure path.
+// A small store backed by the local engine (./client.ts).
 
 import { useSyncExternalStore } from 'react'
+import { basename, finalsView, type FinalsView, type Thumb } from '../lib/finals'
 import type { Mode } from '../lib/terms'
 import { api, watchJob, type EventStatus, type ExportPlan, type KuhaEvent, type Media } from './client'
 
+export type { FinalsView, Thumb }
+
 export type SidecarMode = 'lightroom' | 'darktable' | 'rapidraw'
 
-export type Thumb = { id: string; src?: string; tone: number }
-
 export type MomentView = {
+  shotItemId: number
   moment: string
   count: number
   // false = the missed-moment check found nothing for it
@@ -52,16 +53,6 @@ export type EventView = {
   xmpWritten?: boolean
 }
 
-export type FinalsView = {
-  folder: string
-  selects: number
-  finals: number
-  matchedTotal: number
-  unedited: { file: string; rating: number; moment: string; thumb: Thumb }[]
-  unmatched: { file: string; note: string }[]
-  matched: { final: string; raw: string; moment: string; hamming: number }[]
-}
-
 export const STATUSES: EventStatus[] = ['inquiry', 'booked', 'shot', 'editing', 'delivered']
 
 const UNSORTED = 'Unsorted'
@@ -73,6 +64,13 @@ export function missedMoments(event: EventView): MomentView[] {
 
 function thumb(m: Media): Thumb {
   return { id: String(m.id), src: api.previewUrl(m.id), tone: m.id }
+}
+
+function roll(media: Media[], r: 'A' | 'B'): Roll {
+  const items = media
+    .filter((m) => m.kind === 'video' && m.roll === r)
+    .map((m) => ({ file: basename(m.path), moment: m.moment, duration: '' }))
+  return { count: items.length, items }
 }
 
 async function loadEvent(e: KuhaEvent): Promise<EventView> {
@@ -88,6 +86,7 @@ async function loadEvent(e: KuhaEvent): Promise<EventView> {
     const cov = coverage.find((c) => c.moment === item.moment)
     const found = byMoment.get(item.moment) ?? []
     return {
+      shotItemId: item.id,
       moment: item.moment,
       count: found.length,
       covered: cov?.covered ?? found.length > 0,
@@ -95,7 +94,7 @@ async function loadEvent(e: KuhaEvent): Promise<EventView> {
       // the raw score is jargon, so only Pro sees it
       hint: pro && cov && !cov.covered && media.length > 0 ? `Closest match: ${cov.best_score.toFixed(2)}` : undefined,
       thumbs: found.slice(0, THUMBS_PER_MOMENT).map(thumb),
-      refs: [],
+      refs: item.refs.map((id) => ({ id: `ref-${id}`, src: api.refImageUrl(id), tone: id })),
     }
   })
   const unsorted = byMoment.get(UNSORTED) ?? []
@@ -113,7 +112,7 @@ async function loadEvent(e: KuhaEvent): Promise<EventView> {
     unsortedThumbs: unsorted.map(thumb),
     highlights,
     highlightCount: highlights.length,
-    clips: { A: { count: 0, items: [] }, B: { count: 0, items: [] } },
+    clips: { A: roll(media, 'A'), B: roll(media, 'B') },
     venue: e.venue ?? undefined,
     client: e.client ?? undefined,
     fee: e.fee ?? undefined,
@@ -124,7 +123,7 @@ async function loadEvent(e: KuhaEvent): Promise<EventView> {
 
 type State = {
   events: EventView[]
-  finals: Record<number, FinalsView>
+  finals: Record<number, FinalsView | undefined>
   sidecarMode: SidecarMode
   loaded: boolean
   error: string | null
@@ -234,22 +233,27 @@ export function setStatus(id: number, status: EventStatus) {
   api.updateEvent(id, { status }).catch(() => reloadEvent(id))
 }
 
+// Resolves when a background job ends; doing names the work in failure messages ("Organizing").
+function waitForJob(jobId: string, doing: string, onProgress?: (done: number, total: number) => void): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    watchJob(
+      jobId,
+      (p) => {
+        if (p.stage === 'error') reject(new Error(`${doing} stopped: ${p.message ?? 'unknown error'}`))
+        else if (p.stage !== 'done') onProgress?.(p.done, p.total)
+      },
+      resolve,
+      () => reject(new Error(`Lost touch with the engine while ${doing.toLowerCase()}.`)),
+    )
+  })
+}
+
 // Organize one or more folders; progress lands on event.ingest until the job ends.
 export async function startIngest(eventId: number, folders: string[]): Promise<void> {
   const { job_id } = await api.startIngest(eventId, folders)
   patchEvent(eventId, { ingest: { done: 0, total: 0, folders } })
   try {
-    await new Promise<void>((resolve, reject) => {
-      watchJob(
-        job_id,
-        (p) => {
-          if (p.stage === 'error') reject(new Error(`Organizing stopped: ${p.message ?? 'unknown error'}`))
-          else if (p.stage !== 'done') patchEvent(eventId, { ingest: { done: p.done, total: p.total, folders } })
-        },
-        resolve,
-        () => reject(new Error('Lost touch with the engine while organizing.')),
-      )
-    })
+    await waitForJob(job_id, 'Organizing', (done, total) => patchEvent(eventId, { ingest: { done, total, folders } }))
   } finally {
     // reload first: clearing the progress early would flash the old, empty event
     await reloadEvent(eventId).catch(() => undefined)
@@ -261,17 +265,29 @@ export async function searchMedia(eventId: number, query: string): Promise<Thumb
   return (await api.search(query, eventId)).map(thumb)
 }
 
-export const NOT_CONNECTED = "KuhaGo's engine can't do this yet."
-
-function notConnected(): Promise<never> {
-  return Promise.reject(new Error(NOT_CONNECTED))
+export async function addExamples(eventId: number, shotItemId: number, files: File[]): Promise<void> {
+  await api.addRefs(shotItemId, files)
+  await reloadEvent(eventId)
 }
 
-// No backend route yet (example photos, ExifTool, finals); a browser can't open a native folder picker.
-export const addExamples = (_eventId: number) => notConnected()
-export const writeXmp = (_eventId: number, _mode: SidecarMode) => notConnected()
-export const rescanFinals = (_eventId: number) => notConnected()
-export const pickFolder = () => notConnected()
+// RapidRAW reads full-filename sidecars, the same naming as darktable.
+export async function writeXmp(eventId: number, mode: SidecarMode): Promise<void> {
+  await api.writeXmp(eventId, mode === 'rapidraw' ? 'darktable' : mode)
+  patchEvent(eventId, { xmpWritten: true })
+}
+
+// Last finals result per event; folder is kept from the scan that made it.
+export async function loadFinals(eventId: number, folder = state.finals[eventId]?.folder): Promise<void> {
+  const [result, media] = await Promise.all([api.getFinals(eventId), api.listMedia(eventId)])
+  const view = finalsView(folder, result, media, thumb)
+  setState({ finals: { ...state.finals, [eventId]: view } })
+}
+
+export async function scanFinals(eventId: number, folder: string): Promise<void> {
+  const { job_id } = await api.matchFinals(eventId, folder)
+  await waitForJob(job_id, 'Matching')
+  await loadFinals(eventId, folder)
+}
 
 export const loadExportPlan = (eventId: number): Promise<ExportPlan> => api.exportPlan(eventId)
 
@@ -282,15 +298,5 @@ export async function runExport(
   onProgress: (done: number, total: number) => void,
 ): Promise<void> {
   const { job_id } = await api.startExport(eventId, dest)
-  await new Promise<void>((resolve, reject) => {
-    watchJob(
-      job_id,
-      (p) => {
-        if (p.stage === 'error') reject(new Error(`Copying stopped: ${p.message ?? 'unknown error'}`))
-        else if (p.stage !== 'done') onProgress(p.done, p.total)
-      },
-      resolve,
-      () => reject(new Error('Lost touch with the engine while copying.')),
-    )
-  })
+  await waitForJob(job_id, 'Copying', onProgress)
 }

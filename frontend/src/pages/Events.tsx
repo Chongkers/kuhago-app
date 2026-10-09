@@ -172,14 +172,7 @@ export default function Events() {
     <Page
       pro={pro}
       width="max-w-7xl"
-      right={
-        <>
-          <Link to="/settings" className="hover:text-neutral-950">
-            Settings
-          </Link>
-          <ModeToggle />
-        </>
-      }
+      right={<ModeToggle />}
     >
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>

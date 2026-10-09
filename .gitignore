@@ -41,3 +41,6 @@ desktop.ini
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Local-only docs
+docs/HANDOFF.pdf

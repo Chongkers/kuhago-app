@@ -22,5 +22,7 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // node:test files; Node strips their types when it runs them (`npm test`)
+  "exclude": ["src/**/*.test.ts"]
 }

@@ -16,7 +16,7 @@ import { rollLabel, term } from '../lib/terms'
 import { useAction } from '../lib/useAction'
 import CoverageCard from './CoverageCard'
 import OrganizeCard from './OrganizeCard'
-import { Badge, Notice, Page, Thumb } from './ui'
+import { Badge, ImagePicker, Notice, Page, Thumb } from './ui'
 
 export const SIDECAR_OPTIONS: { mode: SidecarMode; label: string; example: string }[] = [
   { mode: 'lightroom', label: 'Lightroom Classic', example: 'IMG_0001.xmp' },
@@ -93,6 +93,7 @@ function XmpPanel({ event }: { event: EventView }) {
       >
         Write to {event.photos.toLocaleString('en-US')} sidecars
       </button>
+      {event.xmpWritten && <Notice>Keywords written. Re-read metadata in your editor to see them.</Notice>}
       <Notice>{error}</Notice>
     </section>
   )
@@ -161,13 +162,12 @@ export default function ProGig({ event }: { event: EventView }) {
                     {m.refs.map((thumb) => (
                       <Thumb key={thumb.id} thumb={thumb} className="aspect-square w-full rounded-md" />
                     ))}
-                    <button
-                      type="button"
-                      onClick={() => refs.run(() => addExamples(event.id))}
-                      className="aspect-square rounded-md border border-dashed border-neutral-400 text-xs text-neutral-600 hover:border-neutral-950"
+                    <ImagePicker
+                      onFiles={(files) => refs.run(() => addExamples(event.id, m.shotItemId, files))}
+                      className="grid aspect-square place-items-center rounded-md border border-dashed border-neutral-400 text-xs text-neutral-600 hover:border-neutral-950"
                     >
                       + Ref
-                    </button>
+                    </ImagePicker>
                   </div>
                 </div>
               ))}
@@ -191,7 +191,7 @@ export default function ProGig({ event }: { event: EventView }) {
                       <li key={clip.file} className="flex items-baseline justify-between gap-3 px-4 py-2.5">
                         <span className="font-mono text-xs">{clip.file}</span>
                         <span className="text-xs text-neutral-600">
-                          {clip.moment} · {clip.duration}
+                          {clip.duration ? `${clip.moment} · ${clip.duration}` : clip.moment}
                         </span>
                       </li>
                     ))}

@@ -7,7 +7,7 @@ import { count, formatDate, peso, todayISO } from '../lib/format'
 import { useMode } from '../lib/mode'
 import { useProfiles } from '../lib/profile'
 import { btnPrimary, card, input, panel } from '../lib/styles'
-import { TEMPLATES } from '../lib/templates'
+import { BLANK, TEMPLATES } from '../lib/templates'
 import { term, type Mode } from '../lib/terms'
 import { useAction } from '../lib/useAction'
 
@@ -33,9 +33,13 @@ function NewEventPanel({ mode, eventType, onPick }: { mode: Mode; eventType: str
 
   return (
     <section className={`${panel} mt-7 p-6`}>
-      <h2 className="text-lg font-semibold">Start from a template</h2>
+      <h2 className="text-lg font-semibold">Start from a preset</h2>
+      <p className="mt-1 text-sm text-neutral-600">
+        A preset is only a starting list of {term('moment', mode)}s. You can add, rename and remove them any time, or
+        start blank.
+      </p>
       <div className="mt-3 flex flex-wrap gap-2">
-        {TEMPLATES.map((template) => (
+        {[...TEMPLATES, { eventType: BLANK, label: 'Blank' }].map((template) => (
           <button
             key={template.eventType}
             type="button"
@@ -98,7 +102,7 @@ function EventCard({ event }: { event: EventView }) {
       <div className="p-4">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-lg font-semibold">{event.name}</h3>
-          {missed > 0 ? <Badge>{missed} missed</Badge> : <Badge variant="outline">All covered</Badge>}
+          {missed > 0 ? <Badge variant="outline">{missed} suggested</Badge> : <Badge variant="outline">All covered</Badge>}
         </div>
         <p className="mt-1 text-sm text-neutral-600">
           {formatDate(event.date, event.endDate)} · {count(event.photos, 'photo')} · {count(event.videos, 'video')}

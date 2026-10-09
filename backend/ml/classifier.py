@@ -12,6 +12,7 @@ class ShotItem:
     moment: str
     prompts: list[str]
     ref_emb: np.ndarray | None = None  # [K, EMB_DIM] unit rows of its example photos
+    required: bool = True  # a must-have: only these can be reported as missed
 
 
 def _unit(v: np.ndarray) -> np.ndarray:
@@ -43,16 +44,25 @@ def score_matrix(emb: np.ndarray, items: list[ShotItem], pop: np.ndarray | None 
     return np.stack(cols, axis=1) if cols else np.zeros((len(emb), 0), np.float32)
 
 
+def background_floor(emb: np.ndarray) -> np.ndarray:
+    """Per media row, the score a moment has to reach to mean anything: the best cosine with a caption that
+    fits any photo, plus TAU_BACKGROUND. -inf when no background captions are configured."""
+    if not config.BACKGROUND_PROMPTS or not len(emb):
+        return np.full(len(emb), -np.inf, np.float32)
+    return (emb @ embed_texts(config.BACKGROUND_PROMPTS).T).max(axis=1) + config.TAU_BACKGROUND
+
+
 def classify_moments(emb: np.ndarray, items: list[ShotItem], pop: np.ndarray | None = None) -> list[tuple[str, float]]:
-    """(moment, top1 − top2) per media row; "Unsorted" when top1 or the margin is too low."""
+    """(moment, top1 − top2) per media row; "Unsorted" when top1 or the margin is too low, or when the photo
+    fits its best moment no better than it fits "a photo" (off-theme)."""
     if not items:
         return [(config.UNSORTED, 0.0)] * len(emb)
     S = score_matrix(emb, items, pop)
     top = np.sort(S, axis=1)
     seconds = top[:, -2] if S.shape[1] > 1 else np.zeros(len(S))  # a lone moment's margin is top1
     out = []
-    for row, first, second in zip(S, top[:, -1], seconds):
+    for row, first, second, floor in zip(S, top[:, -1], seconds, background_floor(emb)):
         conf = float(first - second)
-        ok = first >= config.TAU_SCORE and conf >= config.TAU_MARGIN
+        ok = first >= config.TAU_SCORE and conf >= config.TAU_MARGIN and first >= floor
         out.append((items[int(row.argmax())].moment if ok else config.UNSORTED, conf))
     return out

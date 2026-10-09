@@ -117,20 +117,20 @@ export default function Export() {
               <div className="mt-3 space-y-3 text-sm text-neutral-600">
                 {missed.length > 0 ? (
                   <p className="flex items-start gap-2">
-                    <Badge>{missed.length} missed</Badge>
+                    <Badge variant="outline">{missed.length} suggested</Badge>
                     <span>
-                      {listOf(missed.map((m) => m.moment))} still {missed.length === 1 ? 'has' : 'have'} no photos. You
-                      can export now and add them later.
+                      KuhaGo didn't find photos for {listOf(missed.map((m) => m.moment))}. You can export now and add
+                      them later.
                     </span>
                   </p>
                 ) : (
                   <p className="flex items-start gap-2">
                     <Badge variant="outline">All covered</Badge>
-                    <span>Every moment on your checklist has photos.</span>
+                    <span>Every must-have on your checklist has photos.</span>
                   </p>
                 )}
                 <Link to={eventPath} className="inline-block font-display font-semibold text-neutral-950 underline">
-                  Review missed moments
+                  See KuhaGo's suggestions
                 </Link>
               </div>
             )}

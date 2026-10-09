@@ -3,8 +3,9 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
+from PIL import Image
 
-from app import db
+from app import config, db
 
 router = APIRouter()
 
@@ -46,3 +47,27 @@ def preview(media_id: int):
     if not row or not row["preview_path"] or not Path(row["preview_path"]).exists():
         raise HTTPException(404, "preview not found")
     return FileResponse(row["preview_path"], media_type="image/jpeg")
+
+
+@router.get("/media/{media_id}/thumb")
+def thumb(media_id: int):
+    """A small copy of the preview for grids, made on first request and kept. The UI adds a version to the URL
+    (SQLite reuses media ids after an event is deleted), so the browser may cache it for good."""
+    with closing(db.connect()) as con:
+        row = con.execute("SELECT preview_path FROM media WHERE id = ?", (media_id,)).fetchone()
+    src = Path(row["preview_path"]) if row and row["preview_path"] else None
+    if src is None or not src.exists():
+        raise HTTPException(404, "preview not found")
+    out = src.parent.parent / "thumbs" / src.name
+    if not out.exists() or out.stat().st_mtime < src.stat().st_mtime:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        tmp = out.with_suffix(f".{media_id}.tmp")  # two requests never share a half-written file
+        with Image.open(src) as img:
+            img.draft("RGB", (config.THUMB_MAX_PX, config.THUMB_MAX_PX))  # JPEG: decode small, much faster
+            small = img.convert("RGB")
+            small.thumbnail((config.THUMB_MAX_PX, config.THUMB_MAX_PX))
+            small.save(tmp, "JPEG", quality=config.THUMB_JPEG_QUALITY)
+        tmp.replace(out)
+    return FileResponse(
+        out, media_type="image/jpeg", headers={"Cache-Control": f"private, max-age={config.THUMB_MAX_AGE}, immutable"}
+    )

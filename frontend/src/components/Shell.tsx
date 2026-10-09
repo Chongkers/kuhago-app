@@ -69,7 +69,7 @@ const SHORT_DATE = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'nume
 function recentLabel(event: EventView): string | undefined {
   if (event.mode === 'personal') {
     const missed = missedMoments(event).length
-    return missed > 0 ? `${missed} missed` : undefined
+    return missed > 0 ? `${missed} suggested` : undefined
   }
   if (event.status === 'booked' || event.status === 'inquiry') {
     return event.date ? SHORT_DATE.format(new Date(`${event.date}T00:00:00`)) : undefined

@@ -31,7 +31,7 @@ def test_empty_moment_is_missed_and_listed_first():
     out = coverage.compute_coverage(emb, ITEMS, [10, 11, 12], ["Cake", "Cake", "Games"])
     assert [c["moment"] for c in out] == ["Group Photo", "Cake", "Games"]
     missed = out[0]
-    assert missed == {"moment": "Group Photo", "covered": False, "count": 0, "best_score": 0.0, "candidates": [10, 11, 12]}
+    assert missed == {"moment": "Group Photo", "required": True, "covered": False, "count": 0, "best_score": 0.0, "candidates": [10, 11, 12]}
     assert out[1]["covered"] and out[1]["count"] == 2
 
 
@@ -39,7 +39,7 @@ def test_one_strong_unassigned_hit_covers():
     # Classifier left it Unsorted, but its score clears TAU_COV -> not missed.
     emb = np.stack([e(3), e(2)])
     out = {c["moment"]: c for c in coverage.compute_coverage(emb, ITEMS, [7, 8], [config.UNSORTED] * 2)}
-    assert out["Group Photo"] == {"moment": "Group Photo", "covered": True, "count": 0, "best_score": 1.0, "candidates": [8, 7]}
+    assert out["Group Photo"] == {"moment": "Group Photo", "required": True, "covered": True, "count": 0, "best_score": 1.0, "candidates": [8, 7]}
     assert not out["Cake"]["covered"] and not out["Games"]["covered"]
 
 
@@ -74,7 +74,7 @@ def test_coverage_route_reads_db_and_embeddings():
     res = client.get(f"/events/{ev}/coverage")
     assert res.status_code == 200
     assert res.json() == [
-        {"moment": "Group Photo", "covered": False, "count": 0, "best_score": 0.0, "candidates": [mid]},
-        {"moment": "Cake", "covered": True, "count": 1, "best_score": 1.0, "candidates": [mid]},
+        {"moment": "Group Photo", "required": True, "covered": False, "count": 0, "best_score": 0.0, "candidates": [mid]},
+        {"moment": "Cake", "required": True, "covered": True, "count": 1, "best_score": 1.0, "candidates": [mid]},
     ]
     assert client.get("/events/999/coverage").status_code == 404

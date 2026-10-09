@@ -6,9 +6,9 @@ import { useSyncExternalStore } from 'react'
 import { basename, finalsView, type FinalsView, type Thumb } from '../lib/finals'
 import { useProfiles } from '../lib/profile'
 import type { Mode } from '../lib/terms'
-import { api, watchJob, type EventStatus, type ExportPlan, type KuhaEvent, type Media } from './client'
+import { api, watchJob, type EventStatus, type ExportPlan, type KuhaEvent, type Media, type MomentIdea } from './client'
 
-export type { FinalsView, Thumb }
+export type { FinalsView, MomentIdea, Thumb }
 
 export type SidecarMode = 'lightroom' | 'darktable' | 'rapidraw'
 
@@ -16,6 +16,8 @@ export type MomentView = {
   shotItemId: number
   moment: string
   count: number
+  // a must-have: the only kind the missed-moment check reports
+  required: boolean
   // false = the missed-moment check found nothing for it
   covered: boolean
   bestScore?: number
@@ -59,12 +61,21 @@ export const STATUSES: EventStatus[] = ['inquiry', 'booked', 'shot', 'editing', 
 const UNSORTED = 'Unsorted'
 const THUMBS_PER_MOMENT = 6
 
+// Missed = a must-have with nothing found. Optional moments are never reported as missed.
 export function missedMoments(event: EventView): MomentView[] {
-  return event.moments.filter((m) => !m.covered)
+  return event.moments.filter((m) => m.required && !m.covered)
+}
+
+// Media ids are reused after an event is deleted, and thumbs are cached for good, so the URL carries
+// a fingerprint of the file the id currently stands for.
+function fingerprint(text: string): string {
+  let h = 0
+  for (let i = 0; i < text.length; i++) h = (Math.imul(h, 31) + text.charCodeAt(i)) | 0
+  return (h >>> 0).toString(36)
 }
 
 function thumb(m: Media): Thumb {
-  return { id: String(m.id), src: api.previewUrl(m.id), tone: m.id }
+  return { id: String(m.id), src: api.thumbUrl(m.id, fingerprint(`${m.event_id}|${m.path}|${m.taken_at}`)), tone: m.id }
 }
 
 function roll(media: Media[], r: 'A' | 'B'): Roll {
@@ -90,6 +101,7 @@ async function loadEvent(e: KuhaEvent): Promise<EventView> {
       shotItemId: item.id,
       moment: item.moment,
       count: found.length,
+      required: item.required,
       covered: cov?.covered ?? found.length > 0,
       bestScore: cov?.best_score,
       // the raw score is jargon, so only Pro sees it
@@ -231,6 +243,55 @@ export async function createEvent(input: {
   setState({ events: [await loadEvent(created), ...state.events] })
   return created.id
 }
+
+// The checklist is the user's: a preset only fills it in to begin with. Every change re-labels the event.
+export async function addMoment(
+  eventId: number,
+  moment: string,
+  options: { prompts?: string[]; required?: boolean; model?: string } = {},
+): Promise<void> {
+  await api.addShotItem(eventId, { moment, ...options })
+  await reloadEvent(eventId)
+}
+
+export async function updateMoment(
+  eventId: number,
+  shotItemId: number,
+  patch: { moment?: string; required?: boolean },
+): Promise<void> {
+  await api.updateShotItem(shotItemId, patch)
+  await reloadEvent(eventId)
+}
+
+export async function removeMoment(eventId: number, shotItemId: number): Promise<void> {
+  await api.deleteShotItem(shotItemId)
+  await reloadEvent(eventId)
+}
+
+// Replaces the whole list (and the example photos on it) with another preset's, or with nothing.
+export async function switchPreset(eventId: number, eventType: string): Promise<void> {
+  await api.applyTemplate(eventId, eventType)
+  await reloadEvent(eventId)
+}
+
+// The Ollama model the owl can use right now: the preferred one when installed, else the engine's default,
+// else the first installed. null when Ollama is off or has no models (or the engine is unreachable).
+export async function owlModel(preferred: string): Promise<string | null> {
+  try {
+    const status = await api.owlStatus()
+    if (!status.connected) return null
+    return [preferred, status.default_model].find((m) => status.models.includes(m)) ?? status.models[0] ?? null
+  } catch {
+    return null
+  }
+}
+
+// Moments the owl thinks the photos really show; nothing is added until the user picks one.
+export async function suggestMoments(eventId: number, model?: string): Promise<MomentIdea[]> {
+  return (await api.suggestMoments(eventId, model)).moments
+}
+
+export const pickFolder = async (): Promise<string | null> => (await api.pickFolder()).path
 
 export function setStatus(id: number, status: EventStatus) {
   patchEvent(id, { status })

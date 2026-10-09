@@ -46,6 +46,10 @@ export const TEMPLATES: Template[] = [
   },
 ]
 
+// A list that starts empty: the user builds it, alone or with the owl's suggestions.
+export const BLANK = 'custom'
+
 export function templateLabel(eventType: string): string {
+  if (eventType === BLANK) return 'Custom'
   return TEMPLATES.find((t) => t.eventType === eventType)?.label ?? eventType
 }

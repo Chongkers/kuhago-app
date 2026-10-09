@@ -10,5 +10,6 @@ imagehash
 opencv-python-headless
 torch
 open_clip_torch
+silero-vad
 pytest
 httpx

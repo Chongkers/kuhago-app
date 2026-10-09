@@ -44,12 +44,14 @@ It works for everyone:
      Videos/Talking/   Videos/Scenery/
      Unsorted/
    ```
+8. **Ask KuhaGo (optional)** — Chat about an event with a local LLM through [Ollama](https://ollama.com/) on your own machine: ask what's still missing, have it suggest moments to add with one click, or ask it to find photos ("the cake cutting"). Chats are kept per event in your browser. Skip it and everything else still works.
+9. **Local profiles** — On launch, pick *Who's organizing?*. Each profile keeps its own mode, events, and preferences, with an optional PIN to keep family members out of a pro's gigs. Stored in your browser only; no account.
 
 ### Pro mode adds
-8. **Gig tracking** — Client, date, venue, fee, paid status, and project stage.
-9. **RAW support + editor integration** — Writes keywords (`Kuha|Debut|18 Roses`, `A-roll`, `B-roll`) into XMP sidecars so they appear in Lightroom Classic, darktable, and RapidRAW. Talking/scenery clips are labeled **A-roll / B-roll**.
-10. **Selects vs. finals** — Reads your star ratings, matches edited exports back to their RAWs (even after renaming), and flags selects that haven't been edited yet.
-11. **Pro export structure** — `01_RAW/<moment>/`, `02_SELECTS/`, `03_FINALS/`, `04_VIDEO/A-ROLL/`, `04_VIDEO/B-ROLL/`, `05_REFERENCES/`.
+10. **Gig tracking** — Client, date, venue, fee, paid status, and project stage.
+11. **RAW support + editor integration** — Writes keywords (`Kuha|Debut|18 Roses`, `A-roll`, `B-roll`) into XMP sidecars so they appear in Lightroom Classic, darktable, and RapidRAW. Talking/scenery clips are labeled **A-roll / B-roll**.
+12. **Selects vs. finals** — Reads your star ratings, matches edited exports back to their RAWs (even after renaming), and flags selects that haven't been edited yet.
+13. **Pro export structure** — `01_RAW/<moment>/`, `02_SELECTS/`, `03_FINALS/`, `04_VIDEO/A-ROLL/`, `04_VIDEO/B-ROLL/`, `05_REFERENCES/`.
 
 ---
 
@@ -63,7 +65,8 @@ React UI (localhost:5173)  ──REST/SSE──►  FastAPI backend (localhost:8
                                             ├─ Moments: text descriptions + your example photos
                                             ├─ Highlights: duplicate grouping (pHash) + sharpness
                                             ├─ Missed-moment check, search, finals matcher
-                                            └─ XMP writer (Pro): ExifTool
+                                            ├─ XMP writer (Pro): ExifTool
+                                            └─ Ask KuhaGo ──► Ollama (127.0.0.1:11434, optional)
                                          SQLite + .npy embeddings (all local)
 ```
 
@@ -83,7 +86,7 @@ Each moment is recognized by combining CLIP similarity to a visual description (
 | Video frames & audio | [FFmpeg](https://ffmpeg.org/) |
 | Duplicate detection & matching | [ImageHash](https://github.com/JohannesBuchner/imagehash) |
 | Metadata read/write | [ExifTool](https://exiftool.org/) |
-| "Ask the owl" chat (optional) | [Ollama](https://ollama.com/) on localhost — default `llama3.2:3b`, or any model you pull |
+| "Ask KuhaGo" chat (optional) | [Ollama](https://ollama.com/) on localhost — default `llama3.2:3b`, or any model you pull |
 | Backend | Python, FastAPI, SQLite, PyTorch |
 | Frontend | React, Vite, TypeScript, Tailwind CSS |
 | Development | AI-assisted development (Devin / coding agents) |
@@ -101,8 +104,11 @@ All AI inference runs locally. No cloud AI API is used.
   - **Windows:** `winget install Gyan.FFmpeg` and `winget install OliverBetz.ExifTool`
   - **macOS:** `brew install ffmpeg exiftool`
   - **Linux:** `sudo apt install ffmpeg libimage-exiftool-perl`
-- Optional, for **Ask the owl**: [Ollama](https://ollama.com/) running locally, then `ollama pull llama3.2:3b` (one-time download). Without it, everything else works.
+- Optional, for **Ask KuhaGo**: [Ollama](https://ollama.com/) running locally, then `ollama pull llama3.2:3b` (one-time download). Without it, everything else works.
 - Optional: NVIDIA GPU (CUDA) or Apple Silicon (MPS) for faster processing. CPU works.
+
+### Windows: one click
+Run `run.bat` from the repo root. The first run creates the Python environment, installs packages, downloads the CLIP model, and runs `npm install`. Every run then starts Ollama (if installed), the backend, and the UI, and opens http://127.0.0.1:5173. On macOS/Linux, or to do it by hand, follow steps 1–2.
 
 ### 1. Backend
 ```bash
@@ -123,10 +129,16 @@ npm run dev                           # opens http://localhost:5173
 
 ### 3. Try it
 Use any folder of event photos and videos (phone or camera). In the app:
-**Personal mode → New Event → Birthday template → Organize → choose your folder.**
+**Create a profile → Personal mode → New Event → Birthday template → Organize → choose your folder.**
 
 ### Verify it's offline
 After `download_models.py`, turn off Wi-Fi and run the full flow. Nothing breaks.
+
+### Run the tests
+```bash
+cd backend && pytest
+cd frontend && npm test
+```
 
 ---
 
@@ -152,22 +164,24 @@ Kuha writes keywords into XMP sidecars (a backup of every existing sidecar is sa
 
 ## Results
 
-Measured with `python scripts/eval.py` on our own labeled test sets, **offline**, on the hardware listed below. Numbers are filled in from the actual evaluation run.
+Measured with `python scripts/eval.py`, **offline**. Full output: [`results.md`](results.md) (2026-10-09 run). The only set so far is `personal_coco` (birthday template, 91 photos), and its labels are still a **draft** — treat these as early numbers.
 
 | Metric | Result | Test set |
 |---|---|---|
-| Moment accuracy — personal event (phone photos), descriptions only | _TBD_ | _N photos_ |
-| Moment accuracy — personal event, with example photos | _TBD_ | _N photos_ |
-| Moment accuracy — pro event (RAW), with example photos | _TBD_ | _N photos_ |
-| Missed moments correctly flagged | _TBD_ | _N moments_ |
-| Near-duplicates correctly grouped | _TBD_ | _N bursts_ |
-| Search: correct photo in top 5 | _TBD_ | _N queries_ |
-| Talking vs. scenery clip accuracy | _TBD_ | _N clips_ |
-| Finals → RAW match accuracy (Pro) | _TBD_ | _N finals_ |
-| Processing speed | _TBD photos/sec_ | — |
+| Moment accuracy — descriptions only | 73.7% | 76 held-out photos |
+| Moment accuracy — with 1 example photo per moment | 44.7% | same 76 photos |
+| Moment accuracy — pro event (RAW) | _not measured yet_ | — |
+| Missed moments correctly flagged | 3 / 8 | 8 hidden moments |
+| Near-duplicates grouped (pairwise P / R / F1) | 100% / 86.7% / 92.9% | 30 duplicate pairs |
+| Search: correct photo in top 5 | 6 / 6 | 6 queries |
+| Talking vs. scenery clip accuracy | _not measured yet_ (no videos in set) | — |
+| Finals → RAW match accuracy (Pro) | _not measured yet_ (no finals in set) | — |
+| Processing speed (preview + embed) | 40.9 photos/sec | 91 photos |
 | Organizing time: manual vs. Kuha | _TBD_ | — |
 
-**Hardware:** _CPU / GPU / RAM of the test laptop_
+**Hardware:** Apple Silicon Mac (arm64), PyTorch on MPS.
+
+Example photos currently *lower* accuracy on this set; the classifier weights are untuned (`backend/app/config.py`).
 
 **Known limitations:** Phone photos must be copied to a computer first (no phone app yet). CLIP can confuse visually similar moments; example photos reduce this. Very dark or blurry frames often land in *Unsorted*. Heavy crops in edited finals can prevent matching.
 

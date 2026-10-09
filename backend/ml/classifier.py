@@ -18,23 +18,36 @@ def _unit(v: np.ndarray) -> np.ndarray:
     return v / np.linalg.norm(v)
 
 
-def score_matrix(emb: np.ndarray, items: list[ShotItem]) -> np.ndarray:
-    """[N media, M moments] of α·cos(x, T_m) + (1−α)·cos(x, R_m)."""
+def _on_text_scale(r: np.ndarray, r_pop: np.ndarray, t_pop: np.ndarray) -> np.ndarray:
+    """Example-photo cosines moved onto the text cosines' scale (same mean and spread over the event).
+    Photo-to-photo cosines sit far above photo-to-text ones, so blended raw they would hand every photo to
+    whichever moment has examples. Rescaled, examples only re-rank photos within their moment."""
+    spread = r_pop.std() if len(r_pop) > 1 else 0.0
+    if spread <= np.finfo(np.float32).eps:  # one photo, or all alike: the examples say nothing yet
+        return np.full(len(r), t_pop.mean() if len(t_pop) else 0.0, np.float32)
+    return t_pop.mean() + (r - r_pop.mean()) * (t_pop.std() / spread)
+
+
+def score_matrix(emb: np.ndarray, items: list[ShotItem], pop: np.ndarray | None = None) -> np.ndarray:
+    """[N media, M moments] of α·cos(x, T_m) + (1−α)·cos'(x, R_m), where cos' is the example-photo cosine
+    on the text scale. `pop` = all of the event's media embeddings (default: emb), the population for that scale."""
+    pop = emb if pop is None else pop
     cols = []
     for it in items:
-        s = emb @ _unit(embed_texts(it.prompts).mean(0))
+        text = _unit(embed_texts(it.prompts).mean(0))
+        s = emb @ text
         if it.ref_emb is not None and len(it.ref_emb):
-            a = config.ALPHA_WITH_REFS
-            s = a * s + (1 - a) * (emb @ _unit(it.ref_emb.mean(0)))
+            a, ref = config.ALPHA_WITH_REFS, _unit(it.ref_emb.mean(0))
+            s = a * s + (1 - a) * _on_text_scale(emb @ ref, pop @ ref, pop @ text)
         cols.append(s)
     return np.stack(cols, axis=1) if cols else np.zeros((len(emb), 0), np.float32)
 
 
-def classify_moments(emb: np.ndarray, items: list[ShotItem]) -> list[tuple[str, float]]:
+def classify_moments(emb: np.ndarray, items: list[ShotItem], pop: np.ndarray | None = None) -> list[tuple[str, float]]:
     """(moment, top1 − top2) per media row; "Unsorted" when top1 or the margin is too low."""
     if not items:
         return [(config.UNSORTED, 0.0)] * len(emb)
-    S = score_matrix(emb, items)
+    S = score_matrix(emb, items, pop)
     top = np.sort(S, axis=1)
     seconds = top[:, -2] if S.shape[1] > 1 else np.zeros(len(S))  # a lone moment's margin is top1
     out = []

@@ -65,10 +65,36 @@ def test_examples_blend_with_alpha():
 
 
 def test_examples_flip_the_label():
+    # x leans Games by description but looks like Cake's example photo (axis 3); y and z are ordinary photos.
     x = unit(np.array([0.3, 0.4, 0, 0.9] + [0] * (config.EMB_DIM - 4)))
-    assert classifier.classify_moments(x[None], ITEMS)[0][0] == "Games"
+    photos = np.stack([x, e(1), e(0)])
+    assert classifier.classify_moments(photos, ITEMS)[0][0] == "Games"
     with_ref = [ShotItem("Cake", ["axis:0"], ref_emb=e(3)[None]), *ITEMS[1:]]
-    assert classifier.classify_moments(x[None], with_ref)[0][0] == "Cake"
+    labels = [m for m, _ in classifier.classify_moments(photos, with_ref)]
+    assert labels[0] == "Cake"
+    assert labels[1] == "Games"  # the example does not pull unrelated photos in
+
+
+def test_examples_do_not_swallow_the_event():
+    """Real photos of one event all look alike (high photo-to-photo cosine). One moment's example photo
+    must not win every photo just because it is a photo."""
+    look = e(10)  # what every photo of this event shares
+    photos = np.stack([unit(look + 0.3 * e(k)) for k in (0, 0, 1, 1, 2, 2)])
+    plain = [m for m, _ in classifier.classify_moments(photos, ITEMS)]
+    assert plain == ["Cake", "Cake", "Games", "Games", "Gifts", "Gifts"]
+    cake_example = unit(look + 0.3 * e(0))[None]
+    assert float((photos @ cake_example[0]).min()) > 0.9  # raw, the example matches everything
+    with_ref = [ShotItem("Cake", ["axis:0"], ref_emb=cake_example), *ITEMS[1:]]
+    assert [m for m, _ in classifier.classify_moments(photos, with_ref)] == plain
+
+
+def test_examples_are_scaled_against_the_whole_event():
+    # one new photo classified on its own has no spread; `pop` supplies the event it belongs to
+    item = ShotItem("Cake", ["axis:0"], ref_emb=e(3)[None])
+    event = np.stack([e(0), e(3)])
+    a = config.ALPHA_WITH_REFS
+    assert classifier.score_matrix(e(3)[None], [item], event)[0, 0] == pytest.approx(1 - a)
+    assert classifier.score_matrix(e(3)[None], [item])[0, 0] == pytest.approx(0)  # alone: text only says no
 
 
 def test_negative_scores_margin(monkeypatch):

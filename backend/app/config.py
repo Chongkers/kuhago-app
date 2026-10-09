@@ -45,6 +45,25 @@ SEARCH_K = 24
 # Pro: photos rated at least this (or flagged is_select) are selects
 SELECT_MIN_RATING = 3
 
+# Talking vs. scenery clips
+VIDEO_FRAME_FPS = 0.5
+VIDEO_FRAME_WIDTH = 448
+AUDIO_SAMPLE_RATE = 16000
+SPEECH_RATIO_MIN = 0.35
+TAU_TALK = 0.18  # untuned guess, same scale as TAU_SCORE
+TALK_PROMPTS = ["a person talking to the camera", "a person giving a speech"]
+FFMPEG_TIMEOUT = 600  # seconds per video
+
+# Pro: finals matching
+FINALS_TOP_K = 5
+FINALS_PHASH_MAX = 12   # pHash Hamming distance (of 64 bits)
+FINALS_COS_MIN = 0.92
+
+# Pro: XMP sidecars
+XMP_BACKUP_DIR = ".kuha_backup"
+XMP_ROOT_KEYWORD = "Kuha"
+EXIFTOOL_TIMEOUT = 300  # seconds per batched call
+
 # Ingest
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp"}
 RAW_EXTS = {".cr2", ".cr3", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2"}

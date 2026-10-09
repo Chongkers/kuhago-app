@@ -54,7 +54,16 @@ def _event_or_404(con, event_id: int) -> dict:
 
 def _shot_items(con, event_id: int) -> list[dict]:
     rows = con.execute("SELECT * FROM shot_items WHERE event_id = ? ORDER BY id", (event_id,)).fetchall()
-    return [{**r, "prompt": json.loads(r["prompt"]), "required": bool(r["required"])} for r in rows]
+    refs = con.execute(
+        "SELECT r.id, r.shot_item_id FROM refs r JOIN shot_items s ON s.id = r.shot_item_id"
+        " WHERE s.event_id = ? ORDER BY r.id",
+        (event_id,),
+    ).fetchall()
+    return [
+        {**r, "prompt": json.loads(r["prompt"]), "required": bool(r["required"]),
+         "refs": [x["id"] for x in refs if x["shot_item_id"] == r["id"]]}  # each served by GET /refs/{id}/image
+        for r in rows
+    ]
 
 
 @router.get("/events")

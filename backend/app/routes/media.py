@@ -34,6 +34,11 @@ def list_media(event_id: int, moment: str | None = None, roll: str | None = None
         return [media_out(r) for r in con.execute(sql + " ORDER BY taken_at, id", args)]
 
 
+@router.get("/events/{event_id}/highlights")
+def list_highlights(event_id: int):
+    return list_media(event_id, highlights=True)
+
+
 @router.get("/media/{media_id}/preview")
 def preview(media_id: int):
     with closing(db.connect()) as con:

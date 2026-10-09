@@ -1,0 +1,10 @@
+@import 'tailwindcss';
+
+/* System fonts only: the app must run fully offline (no CDN assets). */
+@theme {
+  --font-sans: ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
+}
+
+body {
+  @apply bg-neutral-50 text-neutral-900 antialiased;
+}

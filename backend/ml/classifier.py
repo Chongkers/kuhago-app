@@ -1,4 +1,5 @@
 """Moment classifier (AGENTS.md Agent 3). score_matrix is shared with ml/coverage."""
+from collections import Counter
 from dataclasses import dataclass
 
 import numpy as np
@@ -66,3 +67,17 @@ def classify_moments(emb: np.ndarray, items: list[ShotItem], pop: np.ndarray | N
         ok = first >= config.TAU_SCORE and conf >= config.TAU_MARGIN and first >= floor
         out.append((items[int(row.argmax())].moment if ok else config.UNSORTED, conf))
     return out
+
+
+def classify_clip(frames: np.ndarray, items: list[ShotItem], pop: np.ndarray | None = None) -> tuple[str, float, int]:
+    """A video's (moment, confidence, index of the frame that stands for it). Each sampled frame is classified like
+    a photo and the clip takes the moment most of its sorted frames got. The mean of the frames would keep only what
+    they share ("a photo of people") and send nearly every clip to Unsorted."""
+    labels = classify_moments(frames, items, pop)
+    votes = Counter(m for m, _ in labels if m != config.UNSORTED)
+    if not votes:  # the frame most like the whole clip
+        mean = frames.mean(0)
+        return config.UNSORTED, max((c for _, c in labels), default=0.0), int((frames @ mean).argmax())
+    moment = votes.most_common(1)[0][0]
+    best = max((i for i, (m, _) in enumerate(labels) if m == moment), key=lambda i: labels[i][1])
+    return moment, labels[best][1], best

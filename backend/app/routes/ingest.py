@@ -15,7 +15,7 @@ from media.previews import make_preview
 from media.video import extract_audio, extract_frames
 from media.video import taken_at as video_taken_at
 from ml import clip_engine, highlights, vad
-from ml.classifier import classify_moments
+from ml.classifier import classify_clip, classify_moments
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -48,23 +48,24 @@ def run_ingest(report, event_id: int, folders: list[Path]) -> None:
         _running.discard(event_id)
 
 
-def _clip(src: Path, event_id: int, out_dir: Path) -> tuple[Path, str, np.ndarray, float]:
-    """One video -> (preview frame, taken_at, unit mean of its frame embeddings, speech ratio)."""
+def _clip(src: Path, event_id: int, out_dir: Path, items, pop: np.ndarray) -> tuple:
+    """One video -> (preview, taken_at, embedding, speech ratio, roll, moment, confidence). The preview and the
+    embedding are of the frame that best shows the clip's moment, so reclassify, coverage and search agree with it."""
     key = hashlib.sha1(str(src).encode()).hexdigest()[:20]
     work = config.event_dir(event_id) / "frames" / key
     try:
-        frames = extract_frames(src, work)
-        _, emb = clip_engine.embed_images(frames)
+        got, emb = clip_engine.embed_images(extract_frames(src, work))
         if not len(emb):
             raise ValueError("no readable frames")
-        mean = emb.mean(0)
+        moment, conf, best = classify_clip(emb, items, pop)
         preview = out_dir / f"{key}.jpg"
-        if not preview.exists():
-            out_dir.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(frames[len(frames) // 2], preview)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(got[best], preview)
         wav = extract_audio(src, work / "audio.wav")
         ratio = vad.speech_ratio(wav) if wav else 0.0  # no audio track: scenery
-        return preview, video_taken_at(src), mean / np.linalg.norm(mean), ratio
+        mean = emb.mean(0)  # talking is about the whole clip, not its best frame
+        roll = vad.pick_roll(ratio, float(vad.talk_scores((mean / np.linalg.norm(mean))[None])[0]))
+        return preview, video_taken_at(src), emb[best], ratio, roll, moment, conf
     finally:
         shutil.rmtree(work, ignore_errors=True)  # frames and audio are scratch; only the preview is kept
 
@@ -94,10 +95,20 @@ def _ingest(report, event_id: int, folders: list[Path]) -> None:
         embs.append(emb)
         report("embedding", min(i + config.BATCH_SIZE, len(srcs)), len(srcs))
 
-    clips = {}  # src -> (preview path, taken_at, embedding, speech ratio)
+    photo_emb = np.concatenate([np.zeros((0, config.EMB_DIM), np.float32), *embs])
+    with closing(db.connect()) as con:
+        all_emb = db.load_embeddings(event_id)
+        items = db.load_shot_items(con, event_id, all_emb)
+        earlier = all_emb[[r["emb_index"] for r in con.execute(
+            "SELECT emb_index FROM media WHERE event_id = ? AND emb_index IS NOT NULL", (event_id,)
+        )]]
+    # example-photo scores are scaled against the whole event, not just this folder
+    pop = np.concatenate([earlier, photo_emb])
+
+    clips = {}  # src -> (preview path, taken_at, embedding, speech ratio, roll, moment, confidence)
     for i, src in enumerate(videos, 1):
         try:
-            clips[src] = _clip(src, event_id, out_dir)
+            clips[src] = _clip(src, event_id, out_dir, items, pop)
         except Exception as e:  # includes FFmpeg missing from PATH
             log.warning("skip %s: %s", src, e)
         report("videos", i, len(videos))
@@ -105,18 +116,11 @@ def _ingest(report, event_id: int, folders: list[Path]) -> None:
         return
 
     clip_emb = np.stack([c[2] for c in clips.values()]) if clips else np.zeros((0, config.EMB_DIM), np.float32)
-    emb = np.concatenate([*embs, clip_emb])
-    rows = db.append_embeddings(event_id, emb)
+    rows = db.append_embeddings(event_id, np.concatenate([photo_emb, clip_emb]))
     total = len(ok) + len(clips)
     report("classifying", 0, total)
-    rolls = [vad.pick_roll(c[3], score) for c, score in zip(clips.values(), vad.talk_scores(clip_emb))] if clips else []
+    labels = classify_moments(photo_emb, items, np.concatenate([pop, clip_emb]))
     with closing(db.connect()) as con, con:
-        all_emb = db.load_embeddings(event_id)
-        earlier = [r["emb_index"] for r in con.execute(
-            "SELECT emb_index FROM media WHERE event_id = ? AND emb_index IS NOT NULL", (event_id,)
-        )]
-        # example-photo scores are scaled against the whole event, not just this folder
-        labels = classify_moments(emb, db.load_shot_items(con, event_id, all_emb), all_emb[earlier + rows])
         con.executemany(
             "INSERT OR IGNORE INTO media(event_id, path, kind, preview_path, emb_index, taken_at, moment, confidence)"
             " VALUES (?, ?, 'photo', ?, ?, ?, ?, ?)",
@@ -129,8 +133,8 @@ def _ingest(report, event_id: int, folders: list[Path]) -> None:
             "INSERT OR IGNORE INTO media(event_id, path, kind, preview_path, emb_index, taken_at, moment, confidence,"
             " roll, speech_ratio) VALUES (?, ?, 'video', ?, ?, ?, ?, ?, ?, ?)",
             [
-                (event_id, str(src), str(c[0]), row, c[1], moment, conf, roll, c[3])
-                for (src, c), row, (moment, conf), roll in zip(clips.items(), rows[len(ok) :], labels[len(ok) :], rolls)
+                (event_id, str(src), str(c[0]), row, c[1], c[5], c[6], c[4], c[3])
+                for (src, c), row in zip(clips.items(), rows[len(ok) :])
             ],
         )
     report("classifying", total, total)

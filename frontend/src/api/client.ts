@@ -55,7 +55,8 @@ export type CoverageItem = {
   candidates: number[]
 }
 
-export type JobProgress = { stage: string; done: number; total: number }
+// stage 'error' carries a message and is always followed by 'done'
+export type JobProgress = { stage: string; done: number; total: number; message?: string }
 
 export type ExportPlan = { copies: { src: string; dest: string }[] }
 

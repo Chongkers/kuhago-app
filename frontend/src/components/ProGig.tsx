@@ -15,7 +15,8 @@ import { templateLabel } from '../lib/templates'
 import { rollLabel, term } from '../lib/terms'
 import { useAction } from '../lib/useAction'
 import CoverageCard from './CoverageCard'
-import { Badge, Notice, Page, ProgressBar, Thumb } from './ui'
+import OrganizeCard from './OrganizeCard'
+import { Badge, Notice, Page, Thumb } from './ui'
 
 export const SIDECAR_OPTIONS: { mode: SidecarMode; label: string; example: string }[] = [
   { mode: 'lightroom', label: 'Lightroom Classic', example: 'IMG_0001.xmp' },
@@ -142,20 +143,7 @@ export default function ProGig({ event }: { event: EventView }) {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="space-y-8">
-          {event.ingest && (
-            <section className={`${card} p-4 shadow-none`}>
-              <div className="flex items-baseline justify-between">
-                <h2 className="font-semibold">Ingesting RAW + video</h2>
-                <span className="font-mono text-xs text-neutral-600">
-                  {event.ingest.done.toLocaleString('en-US')} / {event.ingest.total.toLocaleString('en-US')}
-                </span>
-              </div>
-              <div className="mt-2">
-                <ProgressBar done={event.ingest.done} total={event.ingest.total} />
-              </div>
-              <p className="mt-2 font-mono text-xs text-neutral-600">{event.ingest.folders.join(' · ')}</p>
-            </section>
-          )}
+          <OrganizeCard event={event} />
 
           <section>
             <div className="flex flex-wrap items-baseline justify-between gap-2">

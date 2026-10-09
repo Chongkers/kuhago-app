@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import type { Thumb as ThumbData } from '../api/data'
+import { useStatus, type Thumb as ThumbData } from '../api/data'
 import { useMode } from '../lib/mode'
 import type { Mode } from '../lib/terms'
 
@@ -36,6 +36,7 @@ type PageProps = {
 }
 
 export function Page({ pro, center, right, width = 'max-w-6xl', children }: PageProps) {
+  const { error } = useStatus()
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b border-neutral-200 bg-white">
@@ -51,7 +52,7 @@ export function Page({ pro, center, right, width = 'max-w-6xl', children }: Page
       </header>
       <main className={`mx-auto w-full flex-1 px-4 py-10 sm:px-8 ${width}`}>{children}</main>
       <footer className="px-4 py-4 text-center text-xs text-neutral-500 sm:px-8">
-        Showing sample data — the engine isn't connected yet, so nothing is read from or written to disk.
+        {error ?? 'Everything stays on this laptop. Your originals are never moved or changed.'}
       </footer>
     </div>
   )

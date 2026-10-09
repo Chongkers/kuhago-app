@@ -1,4 +1,4 @@
-import type { EventView } from '../api/data'
+import { missedMoments, type EventView } from '../api/data'
 import { count } from '../lib/format'
 import { card } from '../lib/styles'
 import { term } from '../lib/terms'
@@ -8,8 +8,8 @@ import { Badge } from './ui'
 export default function CoverageCard({ event }: { event: EventView }) {
   const { mode } = event
   const pro = mode === 'pro'
-  const missed = event.moments.filter((m) => m.count === 0)
-  const covered = event.moments.filter((m) => m.count > 0)
+  const missed = missedMoments(event)
+  const covered = event.moments.filter((m) => m.covered)
   const total = event.moments.length
 
   const summary = pro

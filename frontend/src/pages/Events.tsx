@@ -1,25 +1,27 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { createEvent, missedMoments, STATUSES, useEvents, type EventView } from '../api/data'
-import { Badge, ModeToggle, Page, Thumb } from '../components/ui'
+import { Badge, ModeToggle, Notice, Page, Thumb } from '../components/ui'
 import { count, formatDate, peso, todayISO } from '../lib/format'
 import { useMode } from '../lib/mode'
 import { btnPrimary, card, input, panel } from '../lib/styles'
 import { TEMPLATES } from '../lib/templates'
 import { term, type Mode } from '../lib/terms'
+import { useAction } from '../lib/useAction'
 
 function NewEventPanel({ mode, eventType, onPick }: { mode: Mode; eventType: string | null; onPick: (t: string) => void }) {
   const navigate = useNavigate()
   const [name, setName] = useState('')
   const [client, setClient] = useState('')
   const [date, setDate] = useState(todayISO)
+  const { error, run } = useAction()
   const pro = mode === 'pro'
 
   function submit(e: FormEvent) {
     e.preventDefault()
     if (!eventType || !name.trim()) return
-    const id = createEvent({ mode, name: name.trim(), eventType, date, ...(pro ? { client: client.trim() } : {}) })
-    navigate(`/events/${id}`)
+    const input = { mode, name: name.trim(), eventType, date, ...(pro ? { client: client.trim() } : {}) }
+    run(async () => navigate(`/events/${await createEvent(input)}`))
   }
 
   return (
@@ -70,6 +72,7 @@ function NewEventPanel({ mode, eventType, onPick }: { mode: Mode; eventType: str
           </button>
         </form>
       )}
+      <Notice>{error}</Notice>
     </section>
   )
 }

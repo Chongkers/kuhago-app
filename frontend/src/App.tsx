@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { useStatus } from './api/data'
 import { ModeProvider, useMode } from './lib/mode'
 import EventDetail from './pages/EventDetail'
 import Events from './pages/Events'
@@ -9,6 +10,8 @@ import Welcome from './pages/Welcome'
 
 function AppRoutes() {
   const { mode } = useMode()
+  // Wait for the first load so event pages don't flash "Not found".
+  if (!useStatus().loaded) return null
 
   return (
     <Routes>

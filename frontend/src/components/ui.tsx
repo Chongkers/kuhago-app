@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useStatus, type Thumb as ThumbData } from '../api/data'
+import { useNavigate } from 'react-router-dom'
+import type { Thumb as ThumbData } from '../api/data'
 import { useMode } from '../lib/mode'
+import { initials } from '../lib/profile'
 import type { Mode } from '../lib/terms'
 
 export function Owl({ className = 'h-7 w-7' }: { className?: string }) {
@@ -24,37 +25,6 @@ export function Owl({ className = 'h-7 w-7' }: { className?: string }) {
         strokeLinejoin="round"
       />
     </svg>
-  )
-}
-
-type PageProps = {
-  pro?: boolean
-  center?: ReactNode
-  right?: ReactNode
-  width?: string
-  children: ReactNode
-}
-
-export function Page({ pro, center, right, width = 'max-w-6xl', children }: PageProps) {
-  const { error } = useStatus()
-  return (
-    <div className="flex min-h-screen flex-col">
-      <header className="border-b border-neutral-200 bg-white">
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-4 py-4 sm:px-8">
-          <Link to="/" className="flex items-center gap-2.5">
-            <Owl />
-            <span className="font-display text-xl font-bold tracking-tight">KuhaGo</span>
-            {pro && <Badge variant="outline">PRO</Badge>}
-          </Link>
-          <div className="order-last w-full sm:order-none sm:w-auto sm:flex-1">{center}</div>
-          <div className="ml-auto flex items-center gap-3 text-sm text-neutral-600">{right}</div>
-        </div>
-      </header>
-      <main className={`mx-auto w-full flex-1 px-4 py-10 sm:px-8 ${width}`}>{children}</main>
-      <footer className="px-4 py-4 text-center text-xs text-neutral-500 sm:px-8">
-        {error ?? 'Everything stays on this laptop. Your originals are never moved or changed.'}
-      </footer>
-    </div>
   )
 }
 
@@ -133,13 +103,13 @@ export function Notice({ children }: { children: ReactNode }) {
   )
 }
 
-export function NotFound() {
+export function Avatar({ name, className = 'h-9 w-9 text-sm' }: { name: string; className?: string }) {
   return (
-    <Page>
-      <h1 className="text-2xl font-bold">Not found</h1>
-      <Link to="/" className="mt-2 inline-block text-sm underline">
-        Back to the list
-      </Link>
-    </Page>
+    <span
+      aria-hidden="true"
+      className={`grid shrink-0 place-items-center rounded-full bg-neutral-950 font-display font-bold text-white ${className}`}
+    >
+      {initials(name)}
+    </span>
   )
 }

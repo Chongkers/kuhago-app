@@ -44,7 +44,7 @@ It works for everyone:
      Videos/Talking/   Videos/Scenery/
      Unsorted/
    ```
-8. **Ask the owl (optional)** — Chat about an event ("what moments are we still missing?") with a local LLM through [Ollama](https://ollama.com/) on your own machine. Skip it and everything else still works.
+8. **Ask KuhaGo (optional)** — Chat about an event with a local LLM through [Ollama](https://ollama.com/) on your own machine: ask what's still missing, have it suggest moments to add with one click, or ask it to find photos ("the cake cutting"). Chats are kept per event in your browser. Skip it and everything else still works.
 9. **Local profiles** — On launch, pick *Who's organizing?*. Each profile keeps its own mode, events, and preferences, with an optional PIN to keep family members out of a pro's gigs. Stored in your browser only; no account.
 
 ### Pro mode adds
@@ -66,7 +66,7 @@ React UI (localhost:5173)  ──REST/SSE──►  FastAPI backend (localhost:8
                                             ├─ Highlights: duplicate grouping (pHash) + sharpness
                                             ├─ Missed-moment check, search, finals matcher
                                             ├─ XMP writer (Pro): ExifTool
-                                            └─ Ask the owl ──► Ollama (127.0.0.1:11434, optional)
+                                            └─ Ask KuhaGo ──► Ollama (127.0.0.1:11434, optional)
                                          SQLite + .npy embeddings (all local)
 ```
 
@@ -86,7 +86,7 @@ Each moment is recognized by combining CLIP similarity to a visual description (
 | Video frames & audio | [FFmpeg](https://ffmpeg.org/) |
 | Duplicate detection & matching | [ImageHash](https://github.com/JohannesBuchner/imagehash) |
 | Metadata read/write | [ExifTool](https://exiftool.org/) |
-| "Ask the owl" chat (optional) | [Ollama](https://ollama.com/) on localhost — default `llama3.2:3b`, or any model you pull |
+| "Ask KuhaGo" chat (optional) | [Ollama](https://ollama.com/) on localhost — default `llama3.2:3b`, or any model you pull |
 | Backend | Python, FastAPI, SQLite, PyTorch |
 | Frontend | React, Vite, TypeScript, Tailwind CSS |
 | Development | AI-assisted development (Devin / coding agents) |
@@ -104,8 +104,11 @@ All AI inference runs locally. No cloud AI API is used.
   - **Windows:** `winget install Gyan.FFmpeg` and `winget install OliverBetz.ExifTool`
   - **macOS:** `brew install ffmpeg exiftool`
   - **Linux:** `sudo apt install ffmpeg libimage-exiftool-perl`
-- Optional, for **Ask the owl**: [Ollama](https://ollama.com/) running locally, then `ollama pull llama3.2:3b` (one-time download). Without it, everything else works.
+- Optional, for **Ask KuhaGo**: [Ollama](https://ollama.com/) running locally, then `ollama pull llama3.2:3b` (one-time download). Without it, everything else works.
 - Optional: NVIDIA GPU (CUDA) or Apple Silicon (MPS) for faster processing. CPU works.
+
+### Windows: one click
+Run `run.bat` from the repo root. The first run creates the Python environment, installs packages, downloads the CLIP model, and runs `npm install`. Every run then starts Ollama (if installed), the backend, and the UI, and opens http://127.0.0.1:5173. On macOS/Linux, or to do it by hand, follow steps 1–2.
 
 ### 1. Backend
 ```bash

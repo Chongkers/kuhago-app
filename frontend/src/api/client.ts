@@ -26,7 +26,7 @@ export type ShotItem = {
   id: number
   event_id: number
   moment: string
-  prompt: string
+  prompt: string[]  // CLIP prompts
   required: boolean
 }
 

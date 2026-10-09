@@ -1,0 +1,81 @@
+{
+  "event_type": "debut",
+  "modes": [
+    "personal",
+    "pro"
+  ],
+  "moments": [
+    {
+      "moment": "Grand Entrance",
+      "required": true,
+      "prompts": [
+        "a young woman in a ball gown walking down a staircase",
+        "a young woman in a gown entering a decorated hall"
+      ]
+    },
+    {
+      "moment": "18 Roses",
+      "required": true,
+      "prompts": [
+        "a young woman in a gown dancing with a man holding a red rose",
+        "a man in a suit handing a rose to a young woman in a gown"
+      ]
+    },
+    {
+      "moment": "18 Candles",
+      "required": true,
+      "prompts": [
+        "a person holding a lit candle giving a message",
+        "people standing in a line holding lit candles"
+      ]
+    },
+    {
+      "moment": "18 Treasures",
+      "required": false,
+      "prompts": [
+        "a person handing a gift to a young woman in a gown",
+        "a young woman in a gown receiving a wrapped present"
+      ]
+    },
+    {
+      "moment": "Cotillion",
+      "required": true,
+      "prompts": [
+        "couples in formal wear dancing in a ballroom",
+        "a group of young people performing a formal waltz"
+      ]
+    },
+    {
+      "moment": "Cake",
+      "required": false,
+      "prompts": [
+        "a tall decorated cake on a table",
+        "a young woman in a gown cutting a cake"
+      ]
+    },
+    {
+      "moment": "Speech / Toast",
+      "required": false,
+      "prompts": [
+        "a person speaking into a microphone at a party",
+        "people raising glasses for a toast"
+      ]
+    },
+    {
+      "moment": "Family Formals",
+      "required": true,
+      "prompts": [
+        "a family in formal wear posing together",
+        "a young woman in a gown posing with her parents"
+      ]
+    },
+    {
+      "moment": "Details / Decor",
+      "required": false,
+      "prompts": [
+        "a decorated venue with flowers and lights",
+        "a close-up of table centerpieces and decorations"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "event_type": "christmas",
+  "modes": [
+    "personal",
+    "pro"
+  ],
+  "moments": [
+    {
+      "moment": "Food on the Table",
+      "required": true,
+      "prompts": [
+        "a dinner table full of food at night",
+        "a family feast with ham and dishes on the table"
+      ]
+    },
+    {
+      "moment": "Family Group Photo",
+      "required": true,
+      "prompts": [
+        "a large family posing together for a photo indoors",
+        "a family group photo in front of a christmas tree"
+      ]
+    },
+    {
+      "moment": "Gift Exchange",
+      "required": false,
+      "prompts": [
+        "people handing wrapped gifts to each other",
+        "adults exchanging christmas presents"
+      ]
+    },
+    {
+      "moment": "Christmas Tree / Parol",
+      "required": false,
+      "prompts": [
+        "a decorated christmas tree with lights",
+        "a glowing star-shaped lantern decoration"
+      ]
+    },
+    {
+      "moment": "Kids Opening Gifts",
+      "required": false,
+      "prompts": [
+        "children unwrapping presents",
+        "a child holding a new toy surrounded by wrapping paper"
+      ]
+    },
+    {
+      "moment": "Mass / Church",
+      "required": false,
+      "prompts": [
+        "people sitting in church pews during mass",
+        "the inside of a church with an altar"
+      ]
+    }
+  ]
+}

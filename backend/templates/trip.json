@@ -1,0 +1,57 @@
+{
+  "event_type": "trip",
+  "modes": [
+    "personal",
+    "pro"
+  ],
+  "moments": [
+    {
+      "moment": "Travel / Transport",
+      "required": false,
+      "prompts": [
+        "people inside a car, van or bus",
+        "an airport terminal or a boat on the water"
+      ]
+    },
+    {
+      "moment": "Scenery",
+      "required": true,
+      "prompts": [
+        "a scenic landscape with mountains or sea",
+        "a wide view of nature"
+      ]
+    },
+    {
+      "moment": "Beach / Pool",
+      "required": false,
+      "prompts": [
+        "people swimming at a beach",
+        "people at a swimming pool"
+      ]
+    },
+    {
+      "moment": "Food",
+      "required": false,
+      "prompts": [
+        "a plate of food at a restaurant",
+        "people eating a meal together"
+      ]
+    },
+    {
+      "moment": "Group Photo",
+      "required": true,
+      "prompts": [
+        "a group of friends posing together outdoors",
+        "a family posing for a group photo at a tourist spot"
+      ]
+    },
+    {
+      "moment": "Selfies",
+      "required": false,
+      "prompts": [
+        "a close-up selfie of people smiling",
+        "a person taking a selfie with a phone"
+      ]
+    }
+  ]
+}

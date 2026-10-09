@@ -1,0 +1,49 @@
+{
+  "event_type": "reunion",
+  "modes": [
+    "personal",
+    "pro"
+  ],
+  "moments": [
+    {
+      "moment": "Group Photo",
+      "required": true,
+      "prompts": [
+        "a large group of people posing together for a photo",
+        "a big family posing for a group photo"
+      ]
+    },
+    {
+      "moment": "Elders / Lolo & Lola",
+      "required": true,
+      "prompts": [
+        "an elderly man and woman smiling",
+        "grandparents sitting with their family"
+      ]
+    },
+    {
+      "moment": "Kids Playing",
+      "required": false,
+      "prompts": [
+        "children playing together",
+        "kids running and laughing outdoors"
+      ]
+    },
+    {
+      "moment": "Food",
+      "required": false,
+      "prompts": [
+        "a long table full of food",
+        "people eating at a buffet"
+      ]
+    },
+    {
+      "moment": "Games",
+      "required": false,
+      "prompts": [
+        "people playing a game at a party",
+        "adults and kids playing a group game"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "event_type": "binyag",
+  "modes": [
+    "personal",
+    "pro"
+  ],
+  "moments": [
+    {
+      "moment": "Arrival",
+      "required": false,
+      "prompts": [
+        "a family arriving at a church with a baby",
+        "people standing outside a church"
+      ]
+    },
+    {
+      "moment": "Baptism Rite",
+      "required": true,
+      "prompts": [
+        "a priest pouring water on a baby's head",
+        "a baby being baptized over a baptismal font"
+      ]
+    },
+    {
+      "moment": "Godparents",
+      "required": true,
+      "prompts": [
+        "adults posing with a baby in a white dress",
+        "godparents holding a baby in church"
+      ]
+    },
+    {
+      "moment": "Candle",
+      "required": false,
+      "prompts": [
+        "a person holding a lit white candle in church",
+        "a tall decorated baptism candle"
+      ]
+    },
+    {
+      "moment": "Family Formals",
+      "required": true,
+      "prompts": [
+        "a family posing with a baby in church",
+        "parents holding a baby in a white baptism gown"
+      ]
+    },
+    {
+      "moment": "Reception",
+      "required": false,
+      "prompts": [
+        "people eating at a party after a ceremony",
+        "a table full of food at a reception"
+      ]
+    },
+    {
+      "moment": "Details",
+      "required": false,
+      "prompts": [
+        "a close-up of a baby's white baptism outfit",
+        "decorations and giveaways on a table"
+      ]
+    }
+  ]
+}

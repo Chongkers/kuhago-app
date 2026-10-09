@@ -1,0 +1,73 @@
+{
+  "event_type": "birthday",
+  "modes": [
+    "personal",
+    "pro"
+  ],
+  "moments": [
+    {
+      "moment": "Arrival / Guests",
+      "required": true,
+      "prompts": [
+        "people arriving at a party",
+        "guests greeting each other at the door"
+      ]
+    },
+    {
+      "moment": "Blowing the Candles",
+      "required": true,
+      "prompts": [
+        "a person blowing out candles on a birthday cake",
+        "a birthday cake with lit candles"
+      ]
+    },
+    {
+      "moment": "Cake",
+      "required": true,
+      "prompts": [
+        "a birthday cake on a table",
+        "a person cutting a cake"
+      ]
+    },
+    {
+      "moment": "Food / Handaan",
+      "required": false,
+      "prompts": [
+        "a table full of food at a party",
+        "people eating at a buffet"
+      ]
+    },
+    {
+      "moment": "Games",
+      "required": false,
+      "prompts": [
+        "children playing party games",
+        "people playing a game at a party"
+      ]
+    },
+    {
+      "moment": "Gift Opening",
+      "required": false,
+      "prompts": [
+        "a person opening a gift",
+        "wrapped presents and gift boxes"
+      ]
+    },
+    {
+      "moment": "Group Photo",
+      "required": true,
+      "prompts": [
+        "a large group of people posing together for a photo",
+        "a family posing for a group photo"
+      ]
+    },
+    {
+      "moment": "Decorations",
+      "required": false,
+      "prompts": [
+        "balloons and party decorations",
+        "a banner and streamers at a birthday party"
+      ]
+    }
+  ]
+}

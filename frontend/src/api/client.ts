@@ -51,6 +51,8 @@ export type Media = {
 
 export type CoverageItem = {
   moment: string
+  // a must-have; only these count as missed
+  required: boolean
   covered: boolean
   count: number
   best_score: number
@@ -68,6 +70,8 @@ export type FinalsResult = {
   unmatched_finals: string[]
   unedited_selects: number[]
 }
+
+export type MomentIdea = { moment: string; prompts: string[] }
 
 export type ChatMessage = { role: 'user' | 'assistant'; content: string }
 export type OwlStatus = { connected: boolean; models: string[]; default_model: string; url: string }
@@ -114,6 +118,12 @@ export const api = {
     request<ShotItem[]>(`/events/${id}/template`, json('POST', { event_type })),
 
   listShotItems: (eventId: number) => request<ShotItem[]>(`/events/${eventId}/shot_items`),
+  // without prompts the engine writes them: from the owl's model when one is given, else from the name
+  addShotItem: (eventId: number, item: { moment: string; prompts?: string[]; required?: boolean; model?: string }) =>
+    request<ShotItem>(`/events/${eventId}/shot_items`, json('POST', item)),
+  updateShotItem: (id: number, patch: { moment?: string; prompts?: string[]; required?: boolean }) =>
+    request<ShotItem>(`/shot_items/${id}`, json('PATCH', patch)),
+  deleteShotItem: (id: number) => request<ShotItem[]>(`/shot_items/${id}`, { method: 'DELETE' }),
   addRefs: (shotItemId: number, files: File[]) => {
     const form = new FormData()
     for (const file of files) form.append('files', file)
@@ -126,7 +136,11 @@ export const api = {
 
   listMedia: (eventId: number, filter: { moment?: string; roll?: 'A' | 'B'; highlights?: boolean } = {}) =>
     request<Media[]>(`/events/${eventId}/media${query(filter)}`),
+  // forgets it in the event; the original file is never touched
+  deleteMedia: (mediaId: number) => request<{ removed: number }>(`/media/${mediaId}`, { method: 'DELETE' }),
   previewUrl: (mediaId: number) => `${API_BASE}/media/${mediaId}/preview`,
+  // small and cached for good by the browser; version must change when the id is reused for another file
+  thumbUrl: (mediaId: number, version: string) => `${API_BASE}/media/${mediaId}/thumb${query({ v: version })}`,
 
   coverage: (eventId: number) => request<CoverageItem[]>(`/events/${eventId}/coverage`),
   search: (q: string, eventId?: number) => request<Media[]>(`/search${query({ q, event_id: eventId })}`),
@@ -137,7 +151,13 @@ export const api = {
 
   owlStatus: () => request<OwlStatus>('/owl/status'),
   ask: (eventId: number, messages: ChatMessage[], model?: string) =>
-    request<{ reply: string }>(`/events/${eventId}/ask`, json('POST', { messages, model })),
+    // moments: names the user can add with a click; photos: what matches when they asked to find something
+    request<{ reply: string; moments: string[]; photos: Media[] }>(`/events/${eventId}/ask`, json('POST', { messages, model })),
+  suggestMoments: (eventId: number, model?: string) =>
+    request<{ moments: MomentIdea[]; saw_photos: boolean }>(`/events/${eventId}/suggest_moments`, json('POST', { model })),
+
+  // the OS folder window on this laptop; null = cancelled
+  pickFolder: () => request<{ path: string | null }>('/pick-folder', { method: 'POST' }),
 
   // Pro only
   matchFinals: (eventId: number, folder: string) =>

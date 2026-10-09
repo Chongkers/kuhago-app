@@ -3,8 +3,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app import jobs
-from app.routes import coverage, events, export, finals, ingest, media, owl, search, shot_items, xmp
+from app import config, jobs
+from app.routes import coverage, dialog, events, export, finals, ingest, media, owl, search, shot_items, xmp
 from ml import clip_engine, vad
 
 
@@ -12,7 +12,14 @@ from ml import clip_engine, vad
 async def lifespan(app: FastAPI):
     clip_engine.load()  # once, never per request
     vad.load()
+    # encode every preset's prompts now, so the first page load doesn't wait for them
+    clip_engine.embed_texts([
+        *(p for t in events.TEMPLATES.values() for m in t["moments"] for p in m["prompts"]),
+        *config.BACKGROUND_PROMPTS, *config.TALK_PROMPTS, *config.SCENE_TAGS,
+    ])
+    dialog.warm()
     yield
+    dialog.close()
 
 
 app = FastAPI(title="Kuha", lifespan=lifespan)
@@ -32,4 +39,5 @@ app.include_router(shot_items.router)
 app.include_router(finals.router)
 app.include_router(xmp.router)
 app.include_router(owl.router)
+app.include_router(dialog.router)
 app.include_router(jobs.router)

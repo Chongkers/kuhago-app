@@ -90,7 +90,7 @@ def append_embeddings(event_id: int, emb: np.ndarray) -> list[int]:
 
 def load_shot_items(con: sqlite3.Connection, event_id: int, all_emb: np.ndarray) -> list[ShotItem]:
     """The event's shot items with their example-photo rows (which share the event's emb.npy with media)."""
-    shots = con.execute("SELECT id, moment, prompt FROM shot_items WHERE event_id = ? ORDER BY id", (event_id,)).fetchall()
+    shots = con.execute("SELECT id, moment, prompt, required FROM shot_items WHERE event_id = ? ORDER BY id", (event_id,)).fetchall()
     refs = con.execute(
         "SELECT r.shot_item_id, r.emb_index FROM refs r JOIN shot_items s ON s.id = r.shot_item_id"
         " WHERE s.event_id = ? AND r.emb_index IS NOT NULL",
@@ -99,5 +99,5 @@ def load_shot_items(con: sqlite3.Connection, event_id: int, all_emb: np.ndarray)
     items = []
     for s in shots:
         rows = [r["emb_index"] for r in refs if r["shot_item_id"] == s["id"]]
-        items.append(ShotItem(s["moment"], json.loads(s["prompt"]), all_emb[rows] if rows else None))
+        items.append(ShotItem(s["moment"], json.loads(s["prompt"]), all_emb[rows] if rows else None, bool(s["required"])))
     return items

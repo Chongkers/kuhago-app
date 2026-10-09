@@ -4,7 +4,7 @@ import { useEvents, useFinals, useStatus, missedMoments, type EventView } from '
 import { useMode } from '../lib/mode'
 import { useProfiles } from '../lib/profile'
 import { backLink } from '../lib/styles'
-import type { Mode } from '../lib/terms'
+import { term, type Mode } from '../lib/terms'
 import { Avatar, ModeToggle, Owl } from './ui'
 
 type IconName = 'grid' | 'list' | 'search' | 'folder' | 'check' | 'gear' | 'owl'
@@ -50,7 +50,7 @@ function navItems(mode: Mode, events: EventView[], current: EventView | undefine
       { to: at(), label: 'Shot list', icon: 'list', end: true },
       { to: at('/finals'), label: 'Selects vs finals', icon: 'check', badge: unedited > 0 ? unedited : undefined },
       { to: at('/export'), label: 'Archive', icon: 'folder' },
-      { to: '/owl', label: 'Ask the owl', icon: 'owl', badge: 'AI' },
+      { to: '/owl', label: term('owl', mode), icon: 'owl', badge: 'AI' },
       { to: '/settings', label: 'Settings', icon: 'gear' },
     ]
   }
@@ -59,7 +59,7 @@ function navItems(mode: Mode, events: EventView[], current: EventView | undefine
     { to: at(), label: 'Moments', icon: 'list', end: true },
     { to: '/search', label: 'Search', icon: 'search' },
     { to: at('/export'), label: 'Export folders', icon: 'folder' },
-    { to: '/owl', label: 'Ask the owl', icon: 'owl', badge: 'AI' },
+    { to: '/owl', label: term('owl', mode), icon: 'owl', badge: 'AI' },
     { to: '/settings', label: 'Settings', icon: 'gear' },
   ]
 }
@@ -69,7 +69,7 @@ const SHORT_DATE = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'nume
 function recentLabel(event: EventView): string | undefined {
   if (event.mode === 'personal') {
     const missed = missedMoments(event).length
-    return missed > 0 ? `${missed} missed` : undefined
+    return missed > 0 ? `${missed} suggested` : undefined
   }
   if (event.status === 'booked' || event.status === 'inquiry') {
     return event.date ? SHORT_DATE.format(new Date(`${event.date}T00:00:00`)) : undefined
@@ -84,13 +84,9 @@ function OwlStatus() {
     <div className="rounded-2xl border border-neutral-200 bg-white p-3 text-xs">
       <p className="flex items-center gap-2 font-display text-sm font-semibold">
         <span className={`h-2 w-2 rounded-full ${prefs?.owlEnabled ? 'bg-neutral-950' : 'border border-neutral-500'}`} />
-        {prefs?.owlEnabled ? 'Ollama, local only' : 'Ask the owl is off'}
+        {prefs?.owlEnabled ? 'Ollama, local only' : 'Ask KuhaGo is off'}
       </p>
-      {prefs?.owlEnabled && (
-        <p className="mt-1.5 break-all font-mono text-neutral-600">
-          {prefs.model} · {prefs.ollamaUrl.replace(/^https?:\/\//, '')}
-        </p>
-      )}
+      {prefs?.owlEnabled && <p className="mt-1.5 break-all font-mono text-neutral-600">{prefs.model}</p>}
       <p className="mt-1.5 text-neutral-600">Offline · nothing leaves your laptop</p>
     </div>
   )

@@ -17,12 +17,17 @@ CLIP_MODEL = "ViT-B-32"
 CLIP_PRETRAINED = "laion2b_s34b_b79k"
 EMB_DIM = 512
 BATCH_SIZE = 32
+TEXT_CACHE_MAX = 4096  # cached text embeddings (2 KB each); search queries fill it, so it is emptied when full
 
 # Moment classifier. CLIP cosines live in ~0.15-0.35; these are untuned guesses from proto/ (tune in A10).
 TAU_SCORE = 0.18   # top1 below this -> "Unsorted"
 TAU_MARGIN = 0.01  # top1 - top2 below this -> "Unsorted"
 ALPHA_WITH_REFS = 0.4  # weight of text vs. example photos when examples exist; 1.0 otherwise
 UNSORTED = "Unsorted"
+# Captions that fit any photo. A photo that matches its best moment no better than the best of these is off-theme
+# (concert photos in a Birthday event), so it stays "Unsorted". Checked on one off-theme folder only.
+BACKGROUND_PROMPTS = ["a photo", "a photo of people"]
+TAU_BACKGROUND = 0.0  # top1 must beat the best background caption by at least this
 
 # Missed-moment check
 TAU_COV = 0.22
@@ -38,6 +43,9 @@ HIGHLIGHTS_PER_MOMENT = 5
 # Previews
 PREVIEW_MAX_PX = 1024
 PREVIEW_JPEG_QUALITY = 85
+THUMB_MAX_PX = 400  # grid tiles; the 1024 px preview is far more than a tile shows
+THUMB_JPEG_QUALITY = 80
+THUMB_MAX_AGE = 31536000  # seconds; thumb URLs carry a version, so the browser may keep them
 
 # Search
 SEARCH_K = 24
@@ -69,6 +77,32 @@ OLLAMA_URL = "http://127.0.0.1:11434"
 OLLAMA_MODEL = "llama3.2:3b"  # used when the page doesn't pick an installed one
 OLLAMA_TIMEOUT = 120  # seconds; a small model on CPU can be slow to answer
 OLLAMA_STATUS_TIMEOUT = 3  # seconds; "is it running?" should never hang the page
+OLLAMA_PROMPT_TIMEOUT = 30  # seconds; describing one new moment must not hold up adding it
+OWL_SAMPLE_PHOTOS = 4    # previews shown to a model that can see, spread over the event
+OWL_TOP_TAGS = 8         # scene tags (below) handed to the model
+OWL_MAX_SUGGESTIONS = 6
+OWL_PROMPTS_PER_MOMENT = 3
+OWL_SUGGESTION_PROMPTS = 2  # captions per suggested moment; fewer than a typed moment gets, to keep the reply short
+OWL_JSON_MAX_TOKENS = 500   # cap on a JSON reply: a small model otherwise sometimes writes on for minutes
+OWL_HISTORY_MESSAGES = 12   # last messages of a chat sent to the model; older ones would crowd out the facts
+OWL_FIND_PHOTOS = 6         # photos shown under a reply when the user asks to find something
+MOMENT_NAME_MAX = 60
+# What CLIP can see in a photo, in plain words. The owl reads the most common ones in an event to work out
+# what the event really was, whether or not its model can look at photos.
+SCENE_TAGS = [
+    "a band playing music on a stage", "a singer holding a microphone", "a crowd at a concert",
+    "a person playing a guitar", "a person playing drums", "stage lights in a dark venue",
+    "people dancing", "a person giving a speech", "an audience sitting and listening",
+    "a group of people posing for a photo", "a portrait of one person", "a selfie",
+    "a couple posing together", "children playing", "a baby", "elderly people",
+    "people eating at a table", "a table full of food", "a cake", "drinks and glasses on a table",
+    "wrapped gifts", "balloons and party decorations", "flowers", "candles",
+    "a church interior", "a priest at an altar", "a bride in a wedding dress", "people in formal clothes",
+    "graduates in caps and gowns", "a classroom", "people working at laptops", "a presentation on a screen",
+    "a sports game", "people playing a game", "a beach", "a swimming pool", "mountains and scenery",
+    "a city street", "a car or bus", "an airport or airplane", "a restaurant", "a house interior",
+    "pets and animals", "a sunset", "a building exterior", "people walking outdoors",
+]
 
 # Ingest
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp"}

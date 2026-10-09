@@ -6,9 +6,9 @@ import { useSyncExternalStore } from 'react'
 import { basename, finalsView, type FinalsView, type Thumb } from '../lib/finals'
 import { useProfiles } from '../lib/profile'
 import type { Mode } from '../lib/terms'
-import { api, watchJob, type EventStatus, type ExportPlan, type KuhaEvent, type Media } from './client'
+import { api, watchJob, type ChatMessage, type EventStatus, type ExportPlan, type KuhaEvent, type Media, type MomentIdea } from './client'
 
-export type { FinalsView, Thumb }
+export type { FinalsView, MomentIdea, Thumb }
 
 export type SidecarMode = 'lightroom' | 'darktable' | 'rapidraw'
 
@@ -16,6 +16,8 @@ export type MomentView = {
   shotItemId: number
   moment: string
   count: number
+  // a must-have: the only kind the missed-moment check reports
+  required: boolean
   // false = the missed-moment check found nothing for it
   covered: boolean
   bestScore?: number
@@ -59,12 +61,28 @@ export const STATUSES: EventStatus[] = ['inquiry', 'booked', 'shot', 'editing', 
 const UNSORTED = 'Unsorted'
 const THUMBS_PER_MOMENT = 6
 
+// Missed = a must-have with nothing found. Optional moments are never reported as missed.
 export function missedMoments(event: EventView): MomentView[] {
-  return event.moments.filter((m) => !m.covered)
+  return event.moments.filter((m) => m.required && !m.covered)
+}
+
+// Media ids are reused after an event is deleted, and thumbs are cached for good, so the URL carries
+// a fingerprint of the file the id currently stands for.
+function fingerprint(text: string): string {
+  let h = 0
+  for (let i = 0; i < text.length; i++) h = (Math.imul(h, 31) + text.charCodeAt(i)) | 0
+  return (h >>> 0).toString(36)
 }
 
 function thumb(m: Media): Thumb {
-  return { id: String(m.id), src: api.previewUrl(m.id), tone: m.id }
+  const version = fingerprint(`${m.event_id}|${m.path}|${m.taken_at}`)
+  return {
+    id: String(m.id),
+    src: api.thumbUrl(m.id, version),
+    tone: m.id,
+    full: `${api.previewUrl(m.id)}?v=${version}`,
+    name: basename(m.path),
+  }
 }
 
 function roll(media: Media[], r: 'A' | 'B'): Roll {
@@ -90,6 +108,7 @@ async function loadEvent(e: KuhaEvent): Promise<EventView> {
       shotItemId: item.id,
       moment: item.moment,
       count: found.length,
+      required: item.required,
       covered: cov?.covered ?? found.length > 0,
       bestScore: cov?.best_score,
       // the raw score is jargon, so only Pro sees it
@@ -232,6 +251,55 @@ export async function createEvent(input: {
   return created.id
 }
 
+// The checklist is the user's: a preset only fills it in to begin with. Every change re-labels the event.
+export async function addMoment(
+  eventId: number,
+  moment: string,
+  options: { prompts?: string[]; required?: boolean; model?: string } = {},
+): Promise<void> {
+  await api.addShotItem(eventId, { moment, ...options })
+  await reloadEvent(eventId)
+}
+
+export async function updateMoment(
+  eventId: number,
+  shotItemId: number,
+  patch: { moment?: string; required?: boolean },
+): Promise<void> {
+  await api.updateShotItem(shotItemId, patch)
+  await reloadEvent(eventId)
+}
+
+export async function removeMoment(eventId: number, shotItemId: number): Promise<void> {
+  await api.deleteShotItem(shotItemId)
+  await reloadEvent(eventId)
+}
+
+// Replaces the whole list (and the example photos on it) with another preset's, or with nothing.
+export async function switchPreset(eventId: number, eventType: string): Promise<void> {
+  await api.applyTemplate(eventId, eventType)
+  await reloadEvent(eventId)
+}
+
+// The Ollama model the owl can use right now: the preferred one when installed, else the engine's default,
+// else the first installed. null when Ollama is off or has no models (or the engine is unreachable).
+export async function owlModel(preferred: string): Promise<string | null> {
+  try {
+    const status = await api.owlStatus()
+    if (!status.connected) return null
+    return [preferred, status.default_model].find((m) => status.models.includes(m)) ?? status.models[0] ?? null
+  } catch {
+    return null
+  }
+}
+
+// Moments the owl thinks the photos really show; nothing is added until the user picks one.
+export async function suggestMoments(eventId: number, model?: string): Promise<MomentIdea[]> {
+  return (await api.suggestMoments(eventId, model)).moments
+}
+
+export const pickFolder = async (): Promise<string | null> => (await api.pickFolder()).path
+
 export function setStatus(id: number, status: EventStatus) {
   patchEvent(id, { status })
   api.updateEvent(id, { status }).catch(() => reloadEvent(id))
@@ -269,6 +337,12 @@ export async function searchMedia(eventId: number | undefined, query: string): P
   return (await api.search(query, eventId)).map(thumb)
 }
 
+// Takes one photo or video out of the event. The original file stays where it is.
+export async function removeMedia(eventId: number, thumbId: string): Promise<void> {
+  await api.deleteMedia(Number(thumbId))
+  await reloadEvent(eventId)
+}
+
 export async function addExamples(eventId: number, shotItemId: number, files: File[]): Promise<void> {
   await api.addRefs(shotItemId, files)
   await reloadEvent(eventId)
@@ -293,17 +367,23 @@ export async function scanFinals(eventId: number, folder: string): Promise<void>
   await loadFinals(eventId, folder)
 }
 
-// Settings actions that need the engine.
-export const askOwl = (_eventId: number | undefined, _prompt: string) => notConnected()
-export const testOllama = (_url: string) => notConnected()
-export const moveLibrary = (_folder: string) => notConnected()
-export const clearPreviewCache = () => notConnected()
-export const clearOwlHistory = () => notConnected()
+export type OwlReply = { reply: string; moments: string[]; photos: Thumb[] }
 
-export const NOT_CONNECTED = "KuhaGo's engine can't do this yet."
+// One answer about an event from Ollama on this laptop. messages is the whole conversation so far.
+export async function askOwl(eventId: number | undefined, messages: ChatMessage[], preferred: string): Promise<OwlReply> {
+  if (eventId === undefined) throw new Error('Create an event first, then ask about it.')
+  // no installed model: the engine's default is asked for, and its reply says how to get it
+  const model = (await owlModel(preferred)) ?? undefined
+  const { reply, moments, photos } = await api.ask(eventId, messages, model)
+  return { reply, moments, photos: photos.map(thumb) }
+}
 
-function notConnected(): Promise<never> {
-  return Promise.reject(new Error(NOT_CONNECTED))
+// Resolves with a sentence saying what Ollama has; rejects with one saying what's missing.
+export async function testOllama(): Promise<string> {
+  const status = await api.owlStatus()
+  if (!status.connected) throw new Error("Ollama isn't running on this laptop. Open the Ollama app, then test again.")
+  if (status.models.length === 0) throw new Error(`Ollama is running but has no models yet. Run: ollama pull ${status.default_model}`)
+  return `Connected to Ollama. Models on this laptop: ${status.models.join(', ')}.`
 }
 
 export const loadExportPlan = (eventId: number): Promise<ExportPlan> => api.exportPlan(eventId)

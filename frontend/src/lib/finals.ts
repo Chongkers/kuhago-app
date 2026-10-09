@@ -1,6 +1,7 @@
 import type { FinalsResult, Media } from '../api/client'
 
-export type Thumb = { id: string; src?: string; tone: number }
+// full = the large preview and name = the file's name, for the photo viewer (media only)
+export type Thumb = { id: string; src?: string; tone: number; full?: string; name?: string }
 
 export type FinalsView = {
   // only known after a scan in this session; the engine doesn't store it

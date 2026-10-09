@@ -1,6 +1,7 @@
 """CLIP singleton (AGENTS.md Agent 2). `load()` runs once at startup; tests swap `_model` for a fake."""
 import logging
 import os
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -66,6 +67,24 @@ def embed_images(paths: list[Path]) -> tuple[list[Path], np.ndarray]:
     return ok, np.concatenate(out)
 
 
+_text_cache: dict[str, np.ndarray] = {}
+_text_cache_model = None  # the model the cache was filled by; tests swap `_model`
+_text_lock = threading.Lock()  # requests run in threads; one may empty the cache while another reads it
+
+
 @torch.inference_mode()
 def embed_texts(texts: list[str]) -> np.ndarray:
-    return _norm(_model.encode_text(_model.tokenize(texts)))
+    """Unit rows, one per text. Cached per string: the same moment prompts are scored on every page load,
+    and encoding them again each time is what made the app slow on a laptop CPU."""
+    global _text_cache_model
+    with _text_lock:
+        if _text_cache_model is not _model or len(_text_cache) > config.TEXT_CACHE_MAX:
+            _text_cache.clear()
+            _text_cache_model = _model
+        new = [t for t in dict.fromkeys(texts) if t not in _text_cache]
+        for i in range(0, len(new), config.BATCH_SIZE):
+            batch = new[i : i + config.BATCH_SIZE]
+            _text_cache.update(zip(batch, _norm(_model.encode_text(_model.tokenize(batch)))))
+        if not texts:
+            return np.zeros((0, config.EMB_DIM), np.float32)
+        return np.stack([_text_cache[t] for t in texts])

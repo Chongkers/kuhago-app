@@ -6,11 +6,13 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, StringConstraints
 
 from app import config, db
+from app.routes.ingest import reclassify
 
 router = APIRouter()
 
 # Loaded once; keys are the only accepted event_type values, so a request can never pick an arbitrary path.
 TEMPLATES = {p.stem: json.loads(p.read_text(encoding="utf-8")) for p in config.TEMPLATES_DIR.glob("*.json")}
+BLANK = "custom"  # event_type of a checklist that starts empty; a template is only a preset
 
 
 Mode = Literal["personal", "pro"]
@@ -52,7 +54,7 @@ def _event_or_404(con, event_id: int) -> dict:
     return _event_out(row)
 
 
-def _shot_items(con, event_id: int) -> list[dict]:
+def shot_items_out(con, event_id: int) -> list[dict]:
     rows = con.execute("SELECT * FROM shot_items WHERE event_id = ? ORDER BY id", (event_id,)).fetchall()
     refs = con.execute(
         "SELECT r.id, r.shot_item_id FROM refs r JOIN shot_items s ON s.id = r.shot_item_id"
@@ -97,21 +99,24 @@ def update_event(event_id: int, body: EventPatch):
 def list_shot_items(event_id: int):
     with closing(db.connect()) as con:
         _event_or_404(con, event_id)
-        return _shot_items(con, event_id)
+        return shot_items_out(con, event_id)
 
 
 @router.post("/events/{event_id}/template")
 def apply_template(event_id: int, body: TemplateIn):
-    """Replace the event's shot items with the template's moments."""
-    template = TEMPLATES.get(body.event_type)
+    """Replace the event's shot items with a preset's moments ("custom" or blank: none), then re-label its media.
+    A preset is a starting point: the list is edited through the shot_items routes afterwards."""
+    event_type = body.event_type.strip() or BLANK
+    template = {"moments": []} if event_type == BLANK else TEMPLATES.get(event_type)
     if template is None:
-        raise HTTPException(404, f"unknown template {body.event_type!r}")
+        raise HTTPException(404, "KuhaGo doesn't have a preset by that name.")
     with closing(db.connect()) as con, con:
-        if not con.execute("UPDATE events SET event_type = ? WHERE id = ?", (body.event_type, event_id)).rowcount:
+        if not con.execute("UPDATE events SET event_type = ? WHERE id = ?", (event_type, event_id)).rowcount:
             raise HTTPException(404, "event not found")
         con.execute("DELETE FROM shot_items WHERE event_id = ?", (event_id,))
         con.executemany(
             "INSERT INTO shot_items(event_id, moment, prompt, required) VALUES (?, ?, ?, ?)",
             [(event_id, m["moment"], json.dumps(m["prompts"]), m["required"]) for m in template["moments"]],
         )
-        return _shot_items(con, event_id)
+        reclassify(con, event_id)
+        return shot_items_out(con, event_id)

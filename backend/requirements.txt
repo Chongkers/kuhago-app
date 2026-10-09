@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+sse-starlette
+python-multipart
+numpy
+pillow
+pillow-heif
+torch
+open_clip_torch
+pytest
+httpx

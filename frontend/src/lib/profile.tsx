@@ -6,20 +6,16 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { Mode } from './terms'
 
 export type Theme = 'light' | 'dark' | 'system'
-export type ReplyLanguage = 'taglish' | 'english' | 'filipino'
+// auto = the language the question was asked in
+export type ReplyLanguage = 'auto' | 'english' | 'filipino' | 'taglish'
 
+// Only what something reads. A setting the engine has nothing behind is not kept here (or shown in Settings).
 export type Prefs = {
-  studio: string
   owlEnabled: boolean
   ollamaUrl: string
   model: string
-  language: ReplyLanguage
+  replyLanguage: ReplyLanguage
   libraryFolder: string
-  processing: 'auto' | 'cpu'
-  highlightsPerMoment: number
-  selectMinRating: number
-  currency: 'PHP' | 'USD'
-  archiveName: string
   theme: Theme
   reduceMotion: boolean
 }
@@ -37,17 +33,11 @@ export type Profile = {
 }
 
 export const DEFAULT_PREFS: Prefs = {
-  studio: '',
   owlEnabled: true,
   ollamaUrl: 'http://localhost:11434',
   model: 'llama3.2:3b',
-  language: 'taglish',
+  replyLanguage: 'auto',
   libraryFolder: '',
-  processing: 'auto',
-  highlightsPerMoment: 5,
-  selectMinRating: 3,
-  currency: 'PHP',
-  archiveName: '{date}_{client}_{event}',
   theme: 'system',
   reduceMotion: false,
 }
@@ -125,6 +115,8 @@ type ProfileContextValue = {
   resetPin: (id: string, code: string, newPin: string) => Promise<boolean>
   newRecoveryCode: () => Promise<string>
   claimEvent: (eventId: number) => void
+  // after an event is deleted: its id is free for the next event, whoever makes it
+  releaseEvent: (eventId: number) => void
   ownsEvent: (eventId: number) => boolean
   update: (patch: Partial<Pick<Profile, 'name' | 'mode'>>) => void
   updatePrefs: (patch: Partial<Prefs>) => void
@@ -210,6 +202,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     },
     claimEvent: (eventId) =>
       patchActive((p) => ({ ...p, eventIds: [...new Set([...(p.eventIds ?? []), eventId])] })),
+    releaseEvent: (eventId) =>
+      save(profiles.map((p) => (p.eventIds?.includes(eventId) ? { ...p, eventIds: p.eventIds.filter((id) => id !== eventId) } : p))),
     ownsEvent(eventId) {
       const owner = profiles.find((p) => p.eventIds?.includes(eventId)) ?? profiles[0]
       return !!owner && owner.id === activeId

@@ -36,9 +36,20 @@ class Message(BaseModel):
     content: str
 
 
+Language = Literal["auto", "english", "filipino", "taglish"]
+# auto is what the model does best; the others are the user's choice in Settings
+_REPLY_IN = {
+    "auto": "Reply in the language the user writes in (English, Filipino or Taglish).",
+    "english": "Always reply in English, whatever language the user writes in.",
+    "filipino": "Always reply in Filipino (Tagalog), whatever language the user writes in.",
+    "taglish": "Always reply in Taglish, the everyday mix of Tagalog and English, whatever language the user writes in.",
+}
+
+
 class AskIn(BaseModel):
     messages: list[Message] = Field(min_length=1)
     model: str | None = None
+    language: Language = "auto"
 
 
 @router.get("/owl/status")
@@ -51,7 +62,7 @@ def owl_status():
     return {**out, "connected": True, "models": [m["name"] for m in tags.get("models", []) if "name" in m]}
 
 
-def _facts(event_id: int) -> tuple[str, list[str], int]:
+def _facts(event_id: int, language: Language = "auto") -> tuple[str, list[str], int]:
     """What the assistant is told about an event, the moments already on its list, and how many photos and
     videos it has."""
     with closing(db.connect()) as con:
@@ -77,7 +88,7 @@ def _facts(event_id: int) -> tuple[str, list[str], int]:
         if ev["mode"] == "pro"
         else "You are talking with someone sorting the photos of their own family or friends' event: be warm and simple.",
         "Be helpful and specific: name the moments and numbers from the facts below. Write plain text: no markdown, no headings, no asterisks."
-        " Reply in the language the user writes in (English, Filipino or Taglish).",
+        f" {_REPLY_IN[language]}",
         "You can't see the photos yourself: go by the facts below, and never make up what is in a photo, a name"
         " or a number. If the facts don't answer the question, say so. You may write captions, notes, summaries"
         " and tips for shooting or sorting. You can't move, rename, delete or copy files.",
@@ -320,7 +331,7 @@ def ask(event_id: int, body: AskIn):
     """One reply about an event. When the user asks for themes or moments it also carries names they can add
     with a click; when they ask to find something, it is the photos CLIP matches. Nothing is saved here."""
     model = body.model or config.OLLAMA_MODEL
-    facts, have, media = _facts(event_id)
+    facts, have, media = _facts(event_id, body.language)
     history = [m.model_dump() for m in body.messages[-config.OWL_HISTORY_MESSAGES :]]
     while len(history) > 1 and sum(len(m["content"]) for m in history) > config.OWL_HISTORY_CHARS:
         history.pop(0)  # long replies would push the facts out of num_ctx

@@ -71,8 +71,10 @@ function allNavItems(mode: Mode, events: EventView[], current: EventView | undef
 
 const SHORT_DATE = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
 
-function recentLabel(event: EventView): string | undefined {
-  if (event.mode === 'personal') {
+// What a row of the short list says next to the name: what is still missing in Events, the date or stage in the
+// Tracker. It follows the window, so a gig listed in Events reads like every other event there.
+function recentLabel(event: EventView, mode: Mode): string | undefined {
+  if (mode === 'personal') {
     const missed = missedMoments(event).length
     return missed > 0 ? `${missed} suggested` : undefined
   }
@@ -106,7 +108,7 @@ function Sidebar({ mode }: { mode: Mode }) {
   const recent = events.slice(0, 3)
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-4 overflow-y-auto border-r border-neutral-200 bg-neutral-100 p-3 lg:flex">
+    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-4 border-r border-neutral-200 bg-neutral-100 p-3 lg:flex">
       <div className="flex items-center justify-between gap-2 px-2 pt-2">
         <Link to="/" className="flex items-center gap-2.5">
           <Owl className="h-8 w-8" />
@@ -115,42 +117,46 @@ function Sidebar({ mode }: { mode: Mode }) {
         <ThemeToggle />
       </div>
       <ModeToggle />
-      <nav aria-label="Main" className="space-y-1">
-        {items.map((item) => (
-          <NavLink
-            key={item.label}
-            to={item.to}
-            end={item.end}
-            className={({ isActive }) =>
-              `flex items-center gap-3 rounded-xl px-3 py-2.5 font-display text-sm font-medium ${
-                isActive ? 'bg-neutral-950 text-white' : 'text-neutral-950 hover:bg-neutral-200'
-              }`
-            }
-          >
-            <Icon name={item.icon} />
-            <span className="flex-1">{item.label}</span>
-            {item.badge !== undefined && <span className="text-xs opacity-60">{item.badge}</span>}
-          </NavLink>
-        ))}
-      </nav>
-      {recent.length > 0 && (
-        <div>
-          <p className="px-3 text-xs font-medium uppercase tracking-wide text-neutral-600">
-            {mode === 'pro' ? 'Active gigs' : 'Recent events'}
-          </p>
-          <ul className="mt-2 space-y-0.5">
-            {recent.map((event) => (
-              <li key={event.id}>
-                <Link to={`/events/${event.id}`} className="flex items-baseline justify-between gap-2 rounded-lg px-3 py-1.5 text-sm hover:bg-neutral-200">
-                  <span className="truncate">{event.name}</span>
-                  <span className="shrink-0 text-xs text-neutral-600">{recentLabel(event)}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      <div className="mt-auto space-y-3">
+      {/* Only this middle part scrolls, with no scrollbar: the logo, the window switch and the profile stay put,
+          and the sidebar is the same width in both windows however long the list below gets. */}
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto [scrollbar-width:none]">
+        <nav aria-label="Main" className="space-y-1">
+          {items.map((item) => (
+            <NavLink
+              key={item.label}
+              to={item.to}
+              end={item.end}
+              className={({ isActive }) =>
+                `flex items-center gap-3 rounded-xl px-3 py-2.5 font-display text-sm font-medium ${
+                  isActive ? 'bg-neutral-950 text-white' : 'text-neutral-950 hover:bg-neutral-200'
+                }`
+              }
+            >
+              <Icon name={item.icon} />
+              <span className="flex-1">{item.label}</span>
+              {item.badge !== undefined && <span className="text-xs opacity-60">{item.badge}</span>}
+            </NavLink>
+          ))}
+        </nav>
+        {recent.length > 0 && (
+          <div>
+            <p className="px-3 text-xs font-medium uppercase tracking-wide text-neutral-600">
+              {mode === 'pro' ? 'Active gigs' : 'Recent events'}
+            </p>
+            <ul className="mt-2 space-y-0.5">
+              {recent.map((event) => (
+                <li key={event.id}>
+                  <Link to={`/events/${event.id}`} className="flex items-baseline justify-between gap-2 rounded-lg px-3 py-1.5 text-sm hover:bg-neutral-200">
+                    <span className="truncate">{event.name}</span>
+                    <span className="shrink-0 text-xs text-neutral-600">{recentLabel(event, mode)}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+      <div className="shrink-0 space-y-3">
         {active && (
           <button type="button" onClick={logout} className="flex w-full items-center gap-3 rounded-xl px-2 py-1 text-left hover:bg-neutral-200">
             <Avatar name={active.name} />

@@ -1,7 +1,19 @@
 import type { FinalsResult, Media } from '../api/client'
 
-// full = the large preview and name = the file's name, for the photo viewer (media only)
-export type Thumb = { id: string; src?: string; tone: number; full?: string; name?: string }
+// full = the large preview, name = the file's name and path = where it is, for the photo viewer (media only).
+// video = where a clip plays from. moment, placed (put there by hand) and favorite are what the viewer changes.
+export type Thumb = {
+  id: string
+  src?: string
+  tone: number
+  full?: string
+  name?: string
+  path?: string
+  video?: string
+  moment?: string
+  placed?: boolean
+  favorite?: boolean
+}
 
 export type FinalsView = {
   // only known after a scan in this session; the engine doesn't store it

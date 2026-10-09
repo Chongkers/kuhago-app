@@ -34,6 +34,21 @@ app.add_middleware(
 # Everything the engine answers is under /api: the UI's own pages (/events, /owl, ...) have the same paths, and in
 # a build one server serves both.
 api = APIRouter(prefix="/api")
+
+
+@api.get("/health")
+def health():
+    """What the UI asks when it opens: that the engine answers (the models are loaded before it does), which
+    helper programs are missing, and the numbers its pages quote."""
+    return {
+        "ready": True,
+        "ffmpeg": config.has_tool("ffmpeg"),
+        "exiftool": config.has_tool("exiftool"),
+        "highlights_per_moment": config.HIGHLIGHTS_PER_MOMENT,
+        "select_min_rating": config.SELECT_MIN_RATING,
+    }
+
+
 for module in (events, coverage, ingest, export, media, search, shot_items, finals, xmp, owl, dialog, jobs):
     api.include_router(module.router)
 app.include_router(api)

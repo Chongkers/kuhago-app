@@ -1,9 +1,10 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Thumb as ThumbData } from '../api/data'
 import logo from '../assets/logo.png'
 import { useMode } from '../lib/mode'
 import { initials, isDark, useProfiles } from '../lib/profile'
+import { btnPrimary, btnSecondary } from '../lib/styles'
 import { term, type Mode } from '../lib/terms'
 
 // The logo. It is a picture with its own greys, so it looks the same in both themes.
@@ -69,6 +70,49 @@ export function Modal({ title, wide = false, onClose, children }: { title: strin
   )
 }
 
+// "Are you sure?" as one of the app's own windows, not the browser's pop-up. children say what will happen.
+// The action runs on the confirm button; the window closes when it is done, and stays with the reason if it fails.
+export function Confirm({
+  title,
+  confirmLabel,
+  onConfirm,
+  onClose,
+  children,
+}: {
+  title: string
+  confirmLabel: string
+  onConfirm: () => Promise<unknown>
+  onClose: () => void
+  children: ReactNode
+}) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  function confirm() {
+    setBusy(true)
+    setError(null)
+    onConfirm().then(onClose, (e: Error) => {
+      setError(e.message)
+      setBusy(false)
+    })
+  }
+
+  return (
+    <Modal title={title} onClose={onClose}>
+      <div className="mt-2 space-y-2 text-sm text-neutral-600">{children}</div>
+      <Notice>{error}</Notice>
+      <div className="mt-5 flex justify-end gap-2">
+        <button type="button" autoFocus onClick={onClose} className={btnSecondary}>
+          Cancel
+        </button>
+        <button type="button" disabled={busy} onClick={confirm} className={btnPrimary}>
+          {busy ? 'Working…' : confirmLabel}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 export function Badge({ variant = 'solid', children }: { variant?: 'solid' | 'outline'; children: ReactNode }) {
   const look =
     variant === 'solid'
@@ -88,6 +132,25 @@ const TONES = ['bg-neutral-200', 'bg-neutral-300', 'bg-neutral-300/70', 'bg-neut
 export function Thumb({ thumb, className = '' }: { thumb?: ThumbData; className?: string }) {
   if (thumb?.src) return <img src={thumb.src} alt="" loading="lazy" className={`object-cover ${className}`} />
   return <div className={`${TONES[(thumb?.tone ?? 0) % TONES.length]} ${className}`} />
+}
+
+// An example photo with a small x to take it off its moment.
+export function RemovableThumb({ thumb, label, disabled, onRemove }: { thumb: ThumbData; label: string; disabled?: boolean; onRemove: () => void }) {
+  return (
+    <div className="relative">
+      <Thumb thumb={thumb} className="aspect-square w-full rounded-md" />
+      <button
+        type="button"
+        aria-label={label}
+        title={label}
+        disabled={disabled}
+        onClick={onRemove}
+        className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full border border-neutral-400 bg-white text-xs leading-none hover:border-neutral-950 disabled:opacity-50"
+      >
+        ×
+      </button>
+    </div>
+  )
 }
 
 // A button-looking label around a hidden image file input; the input keeps keyboard focus.

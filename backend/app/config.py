@@ -1,5 +1,6 @@
 """All tunable numbers and paths live here (AGENTS.md §10.10). No magic numbers in ML code."""
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -31,6 +32,10 @@ def tool(name: str) -> str:
     """FFmpeg, ffprobe or ExifTool: the copy shipped beside Kuha.exe if there is one, else whatever is on PATH."""
     bundled = TOOLS_DIR / f"{name}.exe"
     return str(bundled) if bundled.exists() else name
+
+
+def has_tool(name: str) -> bool:
+    return shutil.which(tool(name)) is not None
 
 
 def event_dir(event_id: int) -> Path:

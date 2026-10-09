@@ -1,6 +1,7 @@
 // Typed wrappers for the local FastAPI backend (AGENTS.md §8).
 // The only host this app ever talks to is the backend on localhost.
 
+import type { ReplyLanguage } from '../lib/profile'
 import type { Mode } from '../lib/terms'
 
 // A built UI is served by the engine itself, so the API is at the same address under /api.
@@ -41,6 +42,8 @@ export type Media = {
   kind: 'photo' | 'video'
   taken_at: string | null
   moment: string
+  // true = the user put it in this moment by hand; re-sorting leaves it there
+  moment_locked: boolean
   confidence: number
   roll: 'A' | 'B' | null
   speech_ratio: number | null
@@ -61,7 +64,8 @@ export type CoverageItem = {
   candidates: number[]
 }
 
-// stage 'error' carries a message and is always followed by 'done'
+// stage 'error' carries a message and is always followed by 'done'. 'warning' carries a message about files that
+// were left out; 'cancelled' means the user stopped the job.
 export type JobProgress = { stage: string; done: number; total: number; message?: string }
 
 // dest is relative to the folder the user picks; it starts with root
@@ -72,6 +76,9 @@ export type FinalsResult = {
   unmatched_finals: string[]
   unedited_selects: number[]
 }
+
+// What the engine says about itself when the UI opens. ffmpeg/exiftool: false = not installed on this laptop.
+export type Health = { ready: boolean; ffmpeg: boolean; exiftool: boolean; highlights_per_moment: number; select_min_rating: number }
 
 export type MomentIdea = { moment: string; prompts: string[] }
 
@@ -111,11 +118,14 @@ function query(params: Record<string, string | number | boolean | undefined>): s
 }
 
 export const api = {
+  health: () => request<Health>('/health'),
   listEvents: () => request<KuhaEvent[]>('/events'),
   createEvent: (event: Partial<KuhaEvent> & Pick<KuhaEvent, 'mode' | 'name' | 'event_type'>) =>
     request<KuhaEvent>('/events', json('POST', event)),
   updateEvent: (id: number, patch: Partial<KuhaEvent>) =>
     request<KuhaEvent>(`/events/${id}`, json('PATCH', patch)),
+  // forgets the event in KuhaGo; original files and exported folders are never touched
+  deleteEvent: (id: number) => request<{ deleted: number }>(`/events/${id}`, { method: 'DELETE' }),
   applyTemplate: (id: number, event_type: string) =>
     request<ShotItem[]>(`/events/${id}/template`, json('POST', { event_type })),
 
@@ -132,14 +142,22 @@ export const api = {
     return request<{ added: number }>(`/shot_items/${shotItemId}/refs`, { method: 'POST', body: form })
   },
   refImageUrl: (refId: number) => `${API_BASE}/refs/${refId}/image`,
+  deleteRef: (refId: number) => request<{ removed: number }>(`/refs/${refId}`, { method: 'DELETE' }),
 
   startIngest: (eventId: number, folders: string[]) =>
     request<{ job_id: string }>(`/events/${eventId}/ingest`, json('POST', { folders })),
+  // asks a running job to stop; it ends with a 'cancelled' event
+  cancelJob: (jobId: string) => request<{ cancelling: boolean }>(`/jobs/${jobId}/cancel`, { method: 'POST' }),
 
   listMedia: (eventId: number, filter: { moment?: string; roll?: 'A' | 'B'; highlights?: boolean } = {}) =>
     request<Media[]>(`/events/${eventId}/media${query(filter)}`),
   // forgets it in the event; the original file is never touched
   deleteMedia: (mediaId: number) => request<{ removed: number }>(`/media/${mediaId}`, { method: 'DELETE' }),
+  // moment: a name on the list (or Unsorted) places it by hand, null hands it back to KuhaGo; is_select: favorite
+  updateMedia: (mediaId: number, patch: { moment?: string | null; is_select?: boolean }) =>
+    request<Media>(`/media/${mediaId}`, json('PATCH', patch)),
+  // a video's own file, for the player
+  videoUrl: (mediaId: number) => `${API_BASE}/media/${mediaId}/file`,
   previewUrl: (mediaId: number) => `${API_BASE}/media/${mediaId}/preview`,
   // small and cached for good by the browser; version must change when the id is reused for another file
   thumbUrl: (mediaId: number, version: string) => `${API_BASE}/media/${mediaId}/thumb${query({ v: version })}`,
@@ -152,9 +170,9 @@ export const api = {
     request<{ job_id: string }>(`/events/${eventId}/export`, json('POST', { dest, dry_run: false })),
 
   owlStatus: () => request<OwlStatus>('/owl/status'),
-  ask: (eventId: number, messages: ChatMessage[], model?: string) =>
+  ask: (eventId: number, messages: ChatMessage[], model?: string, language?: ReplyLanguage) =>
     // moments: names the user can add with a click; photos: what matches when they asked to find something
-    request<{ reply: string; moments: string[]; photos: Media[] }>(`/events/${eventId}/ask`, json('POST', { messages, model })),
+    request<{ reply: string; moments: string[]; photos: Media[] }>(`/events/${eventId}/ask`, json('POST', { messages, model, language })),
   suggestMoments: (eventId: number, model?: string) =>
     request<{ moments: MomentIdea[]; saw_photos: boolean }>(`/events/${eventId}/suggest_moments`, json('POST', { model })),
 

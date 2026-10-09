@@ -84,9 +84,15 @@ def add_shot_item(event_id: int, body: ShotItemIn):
 def update_shot_item(shot_item_id: int, body: ShotItemPatch):
     fields = body.model_dump(exclude_unset=True)
     with closing(db.connect()) as con, con:
-        event_id = _item_or_404(con, shot_item_id)["event_id"]
+        item = _item_or_404(con, shot_item_id)
+        event_id = item["event_id"]
         if "moment" in fields:
             _check_name(con, event_id, fields["moment"], shot_item_id)
+            # what the user put in this moment by hand follows it to its new name
+            con.execute(
+                "UPDATE media SET moment = ? WHERE event_id = ? AND moment = ? AND moment_locked = 1",
+                (fields["moment"], event_id, item["moment"]),
+            )
         if "prompts" in fields:
             if not fields["prompts"]:
                 raise HTTPException(422, "A moment needs at least one description of what's in the photo.")
@@ -148,6 +154,23 @@ def add_refs(shot_item_id: int, files: list[UploadFile]):
             )
             reclassify(con, event_id)  # the examples change every photo's scores
         return {"added": len(ok)}
+
+
+@router.delete("/refs/{ref_id}")
+def delete_ref(ref_id: int):
+    """Takes one example photo off its moment and re-labels the event. Its row in emb.npy stays, unused."""
+    with closing(db.connect()) as con, con:
+        row = con.execute(
+            "SELECT r.image_path, s.event_id FROM refs r JOIN shot_items s ON s.id = r.shot_item_id WHERE r.id = ?", (ref_id,)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(404, "This example photo was already removed.")
+        con.execute("DELETE FROM refs WHERE id = ?", (ref_id,))
+        reclassify(con, row["event_id"])
+    stored = Path(row["image_path"])
+    if stored.is_relative_to(config.event_dir(row["event_id"])):  # only ever KuhaGo's own copy (see _save)
+        stored.unlink(missing_ok=True)
+    return {"removed": ref_id}
 
 
 @router.get("/refs/{ref_id}/image")

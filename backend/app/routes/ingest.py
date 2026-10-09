@@ -20,6 +20,9 @@ from ml.classifier import classify_clip, classify_moments
 log = logging.getLogger(__name__)
 router = APIRouter()
 _running: set[int] = set()  # event ids with an ingest in flight; two at once would embed everything twice
+# (preview, mtime) -> pHash. Every re-label redoes the highlights, and hashing each preview again made moving one
+# photo take seconds. ponytail: in memory only, so the first re-label after a restart is the slow one
+_phashes: dict[tuple[str, int], int] = {}
 
 
 class IngestIn(BaseModel):
@@ -39,6 +42,10 @@ def start_ingest(event_id: int, body: IngestIn):
         raise HTTPException(409, "this event is already being organized")
     _running.add(event_id)
     return {"job_id": jobs.start(run_ingest, event_id, folders)}
+
+
+def organizing(event_id: int) -> bool:
+    return event_id in _running
 
 
 def run_ingest(report, event_id: int, folders: list[Path]) -> None:
@@ -70,6 +77,23 @@ def _clip(src: Path, event_id: int, out_dir: Path, items, pop: np.ndarray) -> tu
         shutil.rmtree(work, ignore_errors=True)  # frames and audio are scratch; only the preview is kept
 
 
+def _left_out(photos: int, videos: int) -> list[str]:
+    """Sentences for the UI about the files a job could not read: skipped, never fatal, but not silently."""
+    notes = []
+    if photos:
+        notes.append(f"{photos} photo{'s' * (photos > 1)} couldn't be opened and {'were' if photos > 1 else 'was'} left out.")
+    if videos:
+        many, were = "s" * (videos > 1), "were" if videos > 1 else "was"
+        if config.has_tool("ffmpeg"):
+            notes.append(f"{videos} video{many} couldn't be read and {were} left out.")
+        else:
+            notes.append(
+                f"{videos} video{many} {were} left out: FFmpeg isn't installed on this laptop, and KuhaGo needs it to"
+                " read videos. Install FFmpeg, restart KuhaGo, then organize the folder again."
+            )
+    return notes
+
+
 def _ingest(report, event_id: int, folders: list[Path]) -> None:
     with closing(db.connect()) as con:
         known = {r["path"] for r in con.execute("SELECT path FROM media WHERE event_id = ?", (event_id,))}
@@ -80,6 +104,7 @@ def _ingest(report, event_id: int, folders: list[Path]) -> None:
     out_dir = config.event_dir(event_id) / "previews"
     previews = {}  # src -> (preview path, taken_at)
     for i, src in enumerate(files, 1):
+        jobs.checkpoint(report)  # nothing is saved until every file is read: stopping here leaves the event as it was
         try:
             previews[src] = make_preview(src, out_dir)
         except Exception as e:
@@ -90,6 +115,7 @@ def _ingest(report, event_id: int, folders: list[Path]) -> None:
     src_of = {previews[s][0]: s for s in srcs}
     ok, embs = [], []
     for i in range(0, len(srcs), config.BATCH_SIZE):
+        jobs.checkpoint(report)
         got, emb = clip_engine.embed_images([previews[s][0] for s in srcs[i : i + config.BATCH_SIZE]])
         ok += [src_of[p] for p in got]
         embs.append(emb)
@@ -107,11 +133,14 @@ def _ingest(report, event_id: int, folders: list[Path]) -> None:
 
     clips = {}  # src -> (preview path, taken_at, embedding, speech ratio, roll, moment, confidence)
     for i, src in enumerate(videos, 1):
+        jobs.checkpoint(report)
         try:
             clips[src] = _clip(src, event_id, out_dir, items, pop)
         except Exception as e:  # includes FFmpeg missing from PATH
             log.warning("skip %s: %s", src, e)
         report("videos", i, len(videos))
+    for note in _left_out(len(files) - len(ok), len(videos) - len(clips)):
+        report("warning", 0, 0, message=note)
     if not ok and not clips:
         return
 
@@ -142,8 +171,22 @@ def _ingest(report, event_id: int, folders: list[Path]) -> None:
         _curate(report, con, event_id)
 
 
+def _phash(preview: Path) -> int:
+    key = (str(preview), preview.stat().st_mtime_ns)
+    if key not in _phashes:
+        _phashes[key] = highlights.phash(preview)
+    return _phashes[key]
+
+
 def reclassify(con, event_id: int) -> None:
-    """Re-label every media item after the checklist or its example photos changed, then redo highlights."""
+    """Re-label every media item after the checklist or its example photos changed, then redo highlights.
+    What the user placed by hand (moment_locked) stays where they put it, for as long as that moment is on the list."""
+    on_list = [config.UNSORTED, *(r["moment"] for r in con.execute("SELECT moment FROM shot_items WHERE event_id = ?", (event_id,)))]
+    con.execute(
+        f"UPDATE media SET moment_locked = 0 WHERE event_id = ? AND moment_locked = 1"
+        f" AND moment NOT IN ({', '.join('?' * len(on_list))})",
+        (event_id, *on_list),
+    )
     rows = con.execute(
         "SELECT id, emb_index FROM media WHERE event_id = ? AND emb_index IS NOT NULL ORDER BY id", (event_id,)
     ).fetchall()
@@ -152,7 +195,7 @@ def reclassify(con, event_id: int) -> None:
     all_emb = db.load_embeddings(event_id)
     labels = classify_moments(all_emb[[r["emb_index"] for r in rows]], db.load_shot_items(con, event_id, all_emb))
     con.executemany(
-        "UPDATE media SET moment = ?, confidence = ? WHERE id = ?",
+        "UPDATE media SET moment = ?, confidence = ? WHERE id = ? AND moment_locked = 0",
         [(moment, conf, r["id"]) for r, (moment, conf) in zip(rows, labels)],
     )
     _curate(lambda *_: None, con, event_id)
@@ -170,7 +213,7 @@ def _curate(report, con, event_id: int) -> None:
     for i, r in enumerate(rows, 1):
         try:
             s = r["sharpness"] if r["sharpness"] is not None else highlights.sharpness(Path(r["preview_path"]))
-            h = highlights.phash(Path(r["preview_path"]))  # ponytail: rehashed every ingest, store it if events get huge
+            h = _phash(Path(r["preview_path"]))
         except Exception as e:
             log.warning("skip curation of %s: %s", r["preview_path"], e)
             s, h = 0.0, None  # unreadable preview: never a highlight, only CLIP can group it

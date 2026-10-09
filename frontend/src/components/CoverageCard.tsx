@@ -11,31 +11,26 @@ import {
   type MomentIdea,
   type MomentView,
 } from '../api/data'
-import { count } from '../lib/format'
+import { count, mediaCount } from '../lib/format'
 import { usePrefs } from '../lib/profile'
 import { btnSecondary, card, input } from '../lib/styles'
 import { BLANK, TEMPLATES, templateLabel } from '../lib/templates'
 import { term } from '../lib/terms'
 import { useAction } from '../lib/useAction'
-import { Badge, Notice } from './ui'
+import type { OpenViewer } from './EventViewer'
+import { Badge, Confirm, Notice, Thumb } from './ui'
 
 const link = 'text-sm font-medium underline disabled:opacity-50'
 
 // One moment while the list is being edited: rename, must-have or optional, remove.
 function EditRow({ event, moment, run }: { event: EventView; moment: MomentView; run: (a: () => Promise<unknown>) => void }) {
   const [name, setName] = useState(moment.moment)
+  const [removing, setRemoving] = useState(false)
 
   function rename() {
     const next = name.trim()
     if (!next) setName(moment.moment)
     else if (next !== moment.moment) run(() => updateMoment(event.id, moment.shotItemId, { moment: next }))
-  }
-
-  function remove() {
-    const examples = moment.refs.length > 0 ? ` and its ${term('refs', event.mode).toLowerCase()}` : ''
-    if (window.confirm(`Remove ${moment.moment}${examples} from the list? Your photos are not touched.`)) {
-      run(() => removeMoment(event.id, moment.shotItemId))
-    }
   }
 
   return (
@@ -58,10 +53,26 @@ function EditRow({ event, moment, run }: { event: EventView; moment: MomentView;
           />
           Must-have
         </label>
-        <button type="button" onClick={remove} className={link}>
+        <button type="button" onClick={() => setRemoving(true)} className={link}>
           Remove
         </button>
       </div>
+      {removing && (
+        <Confirm
+          title={`Remove ${moment.moment} from the list?`}
+          confirmLabel="Remove"
+          onConfirm={() => removeMoment(event.id, moment.shotItemId)}
+          onClose={() => setRemoving(false)}
+        >
+          <p>
+            {moment.count > 0
+              ? `The ${mediaCount(moment.photos, moment.videos, ' and ', event.mode === 'pro' ? ['frame', 'clip'] : ['photo', 'video'])} in it ${moment.count === 1 ? 'is' : 'are'} sorted again into what is left on the list.`
+              : `Nothing is sorted into it yet.`}
+            {moment.refs.length > 0 && ` Its ${term('refs', event.mode).toLowerCase()} are removed too.`}
+          </p>
+          <p>Your photos and videos are not touched.</p>
+        </Confirm>
+      )}
     </li>
   )
 }
@@ -74,6 +85,7 @@ function EditTools({ event, run }: { event: EventView; run: (a: () => Promise<un
   const [ideas, setIdeas] = useState<MomentIdea[] | null>(null)
   const [thinking, setThinking] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [swapping, setSwapping] = useState(false)
   const noun = term('moment', event.mode)
   // Asked once per edit, not on every add: when Ollama is off, each call to it costs seconds before it fails.
   // undefined = not known yet, null = the owl can't help right now.
@@ -112,12 +124,6 @@ function EditTools({ event, run }: { event: EventView; run: (a: () => Promise<un
       await addMoment(event.id, idea.moment, { prompts: idea.prompts, required: false })
       setIdeas((list) => list?.filter((i) => i !== idea) ?? null)
     })
-  }
-
-  function swap() {
-    const label = preset === BLANK ? 'an empty list' : `the ${templateLabel(preset)} preset`
-    const warning = `Replace this list with ${label}? The ${noun}s you added and their ${term('refs', event.mode).toLowerCase()} are removed. Your photos are not touched.`
-    if (window.confirm(warning)) run(() => switchPreset(event.id, preset))
   }
 
   return (
@@ -179,18 +185,34 @@ function EditTools({ event, run }: { event: EventView; run: (a: () => Promise<un
             ))}
             <option value={BLANK}>{templateLabel(BLANK)}</option>
           </select>
-          <button type="button" onClick={swap} className={`${btnSecondary} shrink-0 py-2`}>
+          <button type="button" onClick={() => setSwapping(true)} className={`${btnSecondary} shrink-0 py-2`}>
             Use
           </button>
         </div>
       </div>
+      {swapping && (
+        <Confirm
+          title={`Replace this list with ${preset === BLANK ? 'an empty list' : `the ${templateLabel(preset)} preset`}?`}
+          confirmLabel="Replace the list"
+          onConfirm={() => switchPreset(event.id, preset)}
+          onClose={() => setSwapping(false)}
+        >
+          <p>
+            The {noun}s on the list now and their {term('refs', event.mode).toLowerCase()} are removed, and everything is
+            sorted again into the new list.
+          </p>
+          <p>Your photos and videos are not touched.</p>
+        </Confirm>
+      )}
     </div>
   )
 }
 
 // The missed-moment check: missed must-haves first, then what was found, then optional moments with nothing yet.
 // The list itself is the user's to change; the preset only filled it in.
-export default function CoverageCard({ event }: { event: EventView }) {
+// onOpen shows a photo large: a missed moment offers the closest photos KuhaGo found, and the page's viewer asks
+// "is this it?" with one click to put it there.
+export default function CoverageCard({ event, onOpen }: { event: EventView; onOpen?: OpenViewer }) {
   const { mode } = event
   const pro = mode === 'pro'
   // an empty list sorts nothing, so it opens ready to be filled in
@@ -237,18 +259,41 @@ export default function CoverageCard({ event }: { event: EventView }) {
       ) : (
         <ul className="mt-3 divide-y divide-neutral-200">
           {missed.map((m) => (
-            <li key={m.moment} className="flex items-center justify-between gap-3 py-3">
-              <div>
-                <p className="font-display font-semibold">{m.moment}</p>
-                <p className="text-xs text-neutral-600">{m.hint ?? fallbackHint}</p>
+            <li key={m.moment} className="py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-display font-semibold">{m.moment}</p>
+                  <p className="text-xs text-neutral-600">{m.hint ?? fallbackHint}</p>
+                </div>
+                <Badge variant="outline">Suggested</Badge>
               </div>
-              <Badge variant="outline">Suggested</Badge>
+              {onOpen && m.candidates.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-xs font-semibold">Is it one of these?</p>
+                  <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                    {m.candidates.map((thumb, i) => (
+                      <button
+                        key={thumb.id}
+                        type="button"
+                        onClick={() => onOpen(m.candidates, i, m.moment)}
+                        aria-label={`Look at ${thumb.name ?? 'this one'}: is it ${m.moment}?`}
+                        className="cursor-zoom-in overflow-hidden rounded-md hover:opacity-80"
+                      >
+                        <Thumb thumb={thumb} className="aspect-square w-full" />
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-1.5 text-xs text-neutral-600">
+                    The closest {term('frame', mode)}s KuhaGo found. Open one to say yes.
+                  </p>
+                </div>
+              )}
             </li>
           ))}
           {covered.map((m) => (
             <li key={m.moment} className="flex items-center justify-between gap-3 py-3">
               <p className="font-display font-semibold">{m.moment}</p>
-              <Badge variant="outline">{pro ? m.count : count(m.count, 'photo')}</Badge>
+              <Badge variant="outline">{pro ? m.count : mediaCount(m.photos, m.videos)}</Badge>
             </li>
           ))}
           {optional.map((m) => (

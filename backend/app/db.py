@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS media(
     kind TEXT NOT NULL CHECK (kind IN ('photo', 'video')),
     preview_path TEXT, emb_index INTEGER, taken_at TEXT,
     moment TEXT, confidence REAL,
+    moment_locked INTEGER NOT NULL DEFAULT 0,  -- 1: put there by hand, so re-labelling leaves it alone
     roll TEXT CHECK (roll IN ('A', 'B')),
     speech_ratio REAL, sharpness REAL,
     dup_group INTEGER, is_highlight INTEGER NOT NULL DEFAULT 0,
@@ -61,6 +62,9 @@ def connect() -> sqlite3.Connection:
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     con.executescript(SCHEMA)
+    # CREATE TABLE IF NOT EXISTS leaves an older database's tables as they are, so a newer column is added here
+    if "moment_locked" not in {r["name"] for r in con.execute("PRAGMA table_info(media)")}:
+        con.execute("ALTER TABLE media ADD COLUMN moment_locked INTEGER NOT NULL DEFAULT 0")
     return con
 
 

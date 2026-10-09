@@ -103,6 +103,11 @@ OLLAMA_MODEL = "llama3.2:3b"  # used when the page doesn't pick an installed one
 OLLAMA_TIMEOUT = 120  # seconds; a small model on CPU can be slow to answer
 OLLAMA_STATUS_TIMEOUT = 3  # seconds; "is it running?" should never hang the page
 OLLAMA_PROMPT_TIMEOUT = 30  # seconds; describing one new moment must not hold up adding it
+OLLAMA_KEEP_ALIVE = "10m"   # keep the model loaded between questions (reloading is most of a slow first answer), but
+                            # not so long that it holds RAM next to CLIP after the window is closed
+# Ollama's defaults: temperature 0.8 makes a small model invent things, and older versions cut the context at
+# 2048 tokens, silently dropping the facts or the start of the chat
+OLLAMA_OPTIONS = {"temperature": 0.3, "num_ctx": 4096}
 OWL_SAMPLE_PHOTOS = 4    # previews shown to a model that can see, spread over the event
 OWL_TOP_TAGS = 8         # scene tags (below) handed to the model
 OWL_MAX_SUGGESTIONS = 6
@@ -110,6 +115,7 @@ OWL_PROMPTS_PER_MOMENT = 3
 OWL_SUGGESTION_PROMPTS = 2  # captions per suggested moment; fewer than a typed moment gets, to keep the reply short
 OWL_JSON_MAX_TOKENS = 500   # cap on a JSON reply: a small model otherwise sometimes writes on for minutes
 OWL_HISTORY_MESSAGES = 12   # last messages of a chat sent to the model; older ones would crowd out the facts
+OWL_HISTORY_CHARS = 6000    # and at most this much of them (~1500 tokens), so facts + chat fit OLLAMA_OPTIONS num_ctx
 OWL_FIND_PHOTOS = 6         # photos shown under a reply when the user asks to find something
 MOMENT_NAME_MAX = 60
 # What CLIP can see in a photo, in plain words. The owl reads the most common ones in an event to work out

@@ -1,6 +1,7 @@
 import io
 import json
 import urllib.error
+from contextlib import closing
 
 import numpy as np
 import pytest
@@ -85,6 +86,7 @@ def test_ask_sends_event_facts_and_returns_reply(client, monkeypatch):
 
     body = sent["body"]
     assert sent["path"] == "/api/chat" and body["model"] == "gemma3:4b" and body["stream"] is False
+    assert body["options"] == config.OLLAMA_OPTIONS and body["keep_alive"] == config.OLLAMA_KEEP_ALIVE
     system, user = body["messages"]
     assert user == {"role": "user", "content": "What did we miss?"}
     assert system["role"] == "system"
@@ -100,6 +102,7 @@ def test_ask_for_themes_returns_new_moments_to_add(client, monkeypatch):
     res = client.post(f"/events/{ev}/ask", json={"messages": [{"role": "user", "content": "Suggest themes for these photos"}]})
     assert res.json() == {"reply": "Try these.", "moments": ["Band on Stage"], "photos": []}
     assert sent["body"]["format"]["required"] == ["reply", "moments"]
+    assert sent["body"]["options"] == {**config.OLLAMA_OPTIONS, "num_predict": config.OWL_JSON_MAX_TOKENS}
 
 
 def test_ask_to_find_shows_the_photos_clip_matches(client, monkeypatch):
@@ -164,3 +167,26 @@ def test_ask_explains_each_failure(client, monkeypatch, error, status, words):
     res = client.post(f"/events/{ev}/ask", json={"messages": [{"role": "user", "content": "hi"}]})
     assert res.status_code == status
     assert words in res.json()["detail"]
+
+
+def test_ask_to_find_in_filipino_shows_photos(client, monkeypatch):
+    ev = make_event()
+    monkeypatch.setattr(owl, "_ollama", offline)
+    res = client.post(f"/events/{ev}/ask", json={"messages": [{"role": "user", "content": "Hanapin mo yung axis:5"}]}).json()
+    assert res["photos"][0]["path"] == "2.jpg"
+
+
+def test_ask_drops_old_messages_past_the_char_budget(client, monkeypatch):
+    ev = make_event()
+    sent = {}
+    monkeypatch.setattr(owl, "_ollama", lambda path, body=None, **_: sent.update(body=body) or {"message": {"content": "hi"}})
+    chat = [{"role": "user", "content": "x" * (config.OWL_HISTORY_CHARS // 2)} for _ in range(3)] + [{"role": "user", "content": "ok?"}]
+    client.post(f"/events/{ev}/ask", json={"messages": chat})
+    assert len(sent["body"]["messages"]) == 1 + 2  # facts, one long message, the last one
+
+
+def test_facts_speak_to_pros_differently(client):
+    ev = make_event()
+    with closing(db.connect()) as con, con:
+        con.execute("UPDATE events SET mode = 'pro' WHERE id = ?", (ev,))
+    assert "professional photographer" in owl._facts(ev)[0]

@@ -80,20 +80,24 @@ if (-not (Test-Path $lnk)) {
 $url = 'http://127.0.0.1:8000'
 if (Listening 8000) {
     Write-Host "KuhaGo is already running: $url"
-    Start-Process $url
+    try { Start-Process msedge "--app=$url" -ErrorAction Stop } catch { Start-Process $url }
     exit
 }
 
-# the engine loads CLIP before it answers (slow on CPU), so open the browser from the side once it does
+# the engine loads CLIP before it answers (slow on CPU), so open the window from the side once it does.
+# Edge --app gives KuhaGo its own window (no tabs or address bar); without Edge it opens in the default browser.
 Start-Job -ArgumentList $url {
     param($url)
     foreach ($i in 1..90) {
-        try { Invoke-WebRequest "$url/events" -UseBasicParsing -TimeoutSec 2 | Out-Null; Start-Process $url; break }
+        try { Invoke-WebRequest "$url/events" -UseBasicParsing -TimeoutSec 2 | Out-Null
+            try { Start-Process msedge "--app=$url" -ErrorAction Stop } catch { Start-Process $url }
+            break
+        }
         catch { Start-Sleep -Seconds 2 }
     }
 } | Out-Null
 
 $host.UI.RawUI.WindowTitle = 'KuhaGo'
-Write-Host "Starting KuhaGo at $url (the browser opens when it is ready). Close this window to stop KuhaGo."
+Write-Host "Starting KuhaGo at $url (its window opens when it is ready). Close this console window to stop KuhaGo."
 Set-Location $backend
 & $py -m uvicorn app.main:app --port 8000

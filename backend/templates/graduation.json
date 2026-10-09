@@ -1,0 +1,49 @@
+{
+  "event_type": "graduation",
+  "modes": [
+    "personal",
+    "pro"
+  ],
+  "moments": [
+    {
+      "moment": "Marching",
+      "required": true,
+      "prompts": [
+        "graduates in caps and gowns walking in a line",
+        "a procession of students in graduation gowns"
+      ]
+    },
+    {
+      "moment": "Receiving Diploma",
+      "required": true,
+      "prompts": [
+        "a graduate receiving a diploma on stage",
+        "a student shaking hands while holding a diploma"
+      ]
+    },
+    {
+      "moment": "Toga Portrait",
+      "required": true,
+      "prompts": [
+        "a portrait of a person wearing a graduation cap and gown",
+        "a smiling graduate holding a diploma"
+      ]
+    },
+    {
+      "moment": "Family with Graduate",
+      "required": true,
+      "prompts": [
+        "a family posing with a graduate in a gown",
+        "parents hugging a graduate"
+      ]
+    },
+    {
+      "moment": "Celebration Meal",
+      "required": false,
+      "prompts": [
+        "a family eating together at a restaurant",
+        "a table of food at a celebration dinner"
+      ]
+    }
+  ]
+}

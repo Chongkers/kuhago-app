@@ -3,7 +3,8 @@
 
 import type { Mode } from '../lib/terms'
 
-export const API_BASE = 'http://localhost:8000'
+// 127.0.0.1, not localhost: another server on [::]:8000 can catch `localhost` first
+export const API_BASE = 'http://127.0.0.1:8000'
 
 export type EventStatus = 'inquiry' | 'booked' | 'shot' | 'editing' | 'delivered'
 export type SidecarMode = 'lightroom' | 'darktable'
@@ -26,7 +27,7 @@ export type ShotItem = {
   id: number
   event_id: number
   moment: string
-  prompt: string
+  prompt: string[]  // CLIP prompts
   required: boolean
 }
 
@@ -55,9 +56,11 @@ export type CoverageItem = {
   candidates: number[]
 }
 
-export type JobProgress = { stage: string; done: number; total: number }
+// stage 'error' carries a message and is always followed by 'done'
+export type JobProgress = { stage: string; done: number; total: number; message?: string }
 
-export type ExportPlan = { copies: { src: string; dest: string }[] }
+// dest is relative to the folder the user picks; it starts with root
+export type ExportPlan = { root: string; copies: { src: string; dest: string }[] }
 
 export type FinalsResult = {
   matched: { final_path: string; media_id: number; score: number }[]
@@ -65,10 +68,21 @@ export type FinalsResult = {
   unedited_selects: number[]
 }
 
+function sentence(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, init)
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE}${path}`, init)
+  } catch {
+    throw new Error("Can't reach KuhaGo's engine. Check that it's running, then try again.")
+  }
   if (!res.ok) {
-    throw new Error(`${init?.method ?? 'GET'} ${path} failed: ${res.status} ${await res.text()}`)
+    // the engine's own sentence when it sent one; never the method, path or status code
+    const detail: unknown = await res.json().then((body) => body?.detail, () => undefined)
+    throw new Error(typeof detail === 'string' ? sentence(detail) : "That didn't work. Check what you typed and try again.")
   }
   return res.json() as Promise<T>
 }
@@ -110,11 +124,11 @@ export const api = {
   previewUrl: (mediaId: number) => `${API_BASE}/media/${mediaId}/preview`,
 
   coverage: (eventId: number) => request<CoverageItem[]>(`/events/${eventId}/coverage`),
-  highlights: (eventId: number) => request<Media[]>(`/events/${eventId}/highlights`),
   search: (q: string, eventId?: number) => request<Media[]>(`/search${query({ q, event_id: eventId })}`),
 
-  exportEvent: (eventId: number, dest: string, dry_run: boolean) =>
-    request<ExportPlan | { job_id: string }>(`/events/${eventId}/export`, json('POST', { dest, dry_run })),
+  exportPlan: (eventId: number) => request<ExportPlan>(`/events/${eventId}/export`, json('POST', { dry_run: true })),
+  startExport: (eventId: number, dest: string) =>
+    request<{ job_id: string }>(`/events/${eventId}/export`, json('POST', { dest, dry_run: false })),
 
   // Pro only
   matchFinals: (eventId: number, folder: string) =>

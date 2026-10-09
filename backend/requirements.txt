@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+sse-starlette
+python-multipart
+numpy
+pillow
+pillow-heif
+rawpy
+imagehash
+opencv-python-headless
+torch
+open_clip_torch
+pytest
+httpx

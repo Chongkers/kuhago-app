@@ -1,0 +1,97 @@
+{
+  "event_type": "wedding",
+  "modes": [
+    "personal",
+    "pro"
+  ],
+  "moments": [
+    {
+      "moment": "Bride Prep",
+      "required": true,
+      "prompts": [
+        "a bride getting her makeup done",
+        "a wedding dress hanging by a window"
+      ]
+    },
+    {
+      "moment": "Groom Prep",
+      "required": false,
+      "prompts": [
+        "a groom putting on his suit or barong",
+        "a man adjusting his tie in a mirror"
+      ]
+    },
+    {
+      "moment": "Processional",
+      "required": true,
+      "prompts": [
+        "a bride walking down the church aisle",
+        "people walking down the aisle in a church"
+      ]
+    },
+    {
+      "moment": "Vows",
+      "required": true,
+      "prompts": [
+        "a bride and groom facing each other at the altar",
+        "a couple holding hands during a wedding ceremony"
+      ]
+    },
+    {
+      "moment": "Veil & Cord",
+      "required": false,
+      "prompts": [
+        "a white veil draped over a kneeling bride and groom",
+        "a cord placed around a bride and groom's shoulders"
+      ]
+    },
+    {
+      "moment": "Ring Exchange",
+      "required": true,
+      "prompts": [
+        "a close-up of a wedding ring being placed on a finger",
+        "hands exchanging wedding rings"
+      ]
+    },
+    {
+      "moment": "Kiss",
+      "required": true,
+      "prompts": [
+        "a bride and groom kissing",
+        "a newlywed couple kissing at the altar"
+      ]
+    },
+    {
+      "moment": "Family Formals",
+      "required": true,
+      "prompts": [
+        "a bride and groom posing with their family",
+        "a large family in formal wear posing in a church"
+      ]
+    },
+    {
+      "moment": "Reception Entrance",
+      "required": false,
+      "prompts": [
+        "a bride and groom entering a reception hall",
+        "a newlywed couple walking into a party with guests cheering"
+      ]
+    },
+    {
+      "moment": "Cake",
+      "required": false,
+      "prompts": [
+        "a tall white wedding cake",
+        "a bride and groom cutting a cake"
+      ]
+    },
+    {
+      "moment": "Details",
+      "required": false,
+      "prompts": [
+        "a close-up of wedding rings and flowers",
+        "a bridal bouquet and wedding shoes"
+      ]
+    }
+  ]
+}

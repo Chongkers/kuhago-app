@@ -1,47 +1,16 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { addExamples, placeholderThumbs, searchMedia, startIngest, type EventView } from '../api/data'
+import { addExamples, searchMedia, type EventView, type Thumb as ThumbData } from '../api/data'
 import { count, formatDate } from '../lib/format'
 import { backLink, btnPrimary, btnSecondary, card, input, panel } from '../lib/styles'
 import { templateLabel } from '../lib/templates'
 import { rollLabel, term } from '../lib/terms'
 import { useAction } from '../lib/useAction'
 import CoverageCard from './CoverageCard'
+import OrganizeCard from './OrganizeCard'
 import { Notice, Owl, Page, Thumb } from './ui'
 
 type Tab = 'moments' | 'highlights' | 'clips' | 'unsorted'
-
-function OrganizeCard({ event }: { event: EventView }) {
-  const [folders, setFolders] = useState('')
-  const { error, run } = useAction()
-
-  function submit(e: FormEvent) {
-    e.preventDefault()
-    const list = folders.split(';').map((f) => f.trim()).filter(Boolean)
-    if (list.length > 0) run(() => startIngest(event.id, list))
-  }
-
-  return (
-    <form onSubmit={submit} className={`${card} p-5`}>
-      <h2 className="text-lg font-semibold">Add your photos and videos</h2>
-      <p className="mt-1 text-sm text-neutral-600">
-        Paste the folder everyone's photos are in. Several folders? Separate them with a semicolon.
-      </p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <input
-          value={folders}
-          onChange={(e) => setFolders(e.target.value)}
-          placeholder="D:\Photos\Lola 80th"
-          className={`${input} min-w-56 flex-1 font-mono`}
-        />
-        <button type="submit" className={btnPrimary}>
-          Organize
-        </button>
-      </div>
-      <Notice>{error}</Notice>
-    </form>
-  )
-}
 
 function Moments({ event }: { event: EventView }) {
   return (
@@ -74,7 +43,7 @@ function Highlights({ event }: { event: EventView }) {
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {event.highlights.map((h) => (
-          <div key={h.moment} className="relative">
+          <div key={h.thumb.id} className="relative">
             <Thumb thumb={h.thumb} className="aspect-[4/3] w-full rounded-lg" />
             <span className="absolute bottom-2 left-2 rounded bg-neutral-800/80 px-1.5 py-0.5 text-xs text-white">
               {h.moment}
@@ -113,8 +82,9 @@ export default function PersonalEvent({ event }: { event: EventView }) {
   const [tab, setTab] = useState<Tab>('moments')
   const [query, setQuery] = useState('')
   const search = useAction()
+  const [results, setResults] = useState<ThumbData[] | null>(null)
   const examples = useAction()
-  const empty = event.photos + event.videos === 0
+  const empty = event.photos + event.videos === 0 || !!event.ingest
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'moments', label: 'Moments' },
@@ -125,7 +95,7 @@ export default function PersonalEvent({ event }: { event: EventView }) {
 
   function submitSearch(e: FormEvent) {
     e.preventDefault()
-    if (query.trim()) search.run(() => searchMedia(event.id, query.trim()))
+    if (query.trim()) search.run(async () => setResults(await searchMedia(event.id, query.trim())))
   }
 
   return (
@@ -149,6 +119,21 @@ export default function PersonalEvent({ event }: { event: EventView }) {
       }
     >
       <Notice>{search.error}</Notice>
+      {results && (
+        <section className={`${card} mb-6 p-4`}>
+          <div className="flex items-baseline justify-between">
+            <h2 className="font-semibold">Best matches</h2>
+            <button type="button" className="text-sm underline" onClick={() => setResults(null)}>
+              Clear
+            </button>
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
+            {results.map((thumb) => (
+              <Thumb key={thumb.id} thumb={thumb} className="aspect-square w-full rounded-lg" />
+            ))}
+          </div>
+        </section>
+      )}
       <Link to="/" className={backLink}>
         ← {term('eventsTitle', event.mode)}
       </Link>
@@ -191,7 +176,7 @@ export default function PersonalEvent({ event }: { event: EventView }) {
                     KuhaGo wasn't sure about these, so it didn't guess.
                   </p>
                   <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
-                    {placeholderThumbs('unsorted', event.unsorted).map((thumb) => (
+                    {event.unsortedThumbs.map((thumb) => (
                       <Thumb key={thumb.id} thumb={thumb} className="aspect-square w-full rounded-lg" />
                     ))}
                   </div>

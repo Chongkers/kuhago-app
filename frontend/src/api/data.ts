@@ -1,14 +1,11 @@
 // View data for the pages. Pages only import hooks and actions from here.
 //
-// There is no backend yet, so this is an in-memory store seeded with the sample content
-// from the wireframes. To go live, reimplement these hooks/actions on top of ./client.ts;
-// the pages do not need to change. Actions that need the real engine reject with
-// NOT_CONNECTED so the UI already shows their failure path.
+// A small store backed by the local engine (./client.ts). Actions the engine can't do yet
+// reject with NOT_CONNECTED so the UI shows their failure path.
 
 import { useSyncExternalStore } from 'react'
 import type { Mode } from '../lib/terms'
-import { TEMPLATES } from '../lib/templates'
-import type { EventStatus } from './client'
+import { api, watchJob, type EventStatus, type ExportPlan, type KuhaEvent, type Media } from './client'
 
 export type SidecarMode = 'lightroom' | 'darktable' | 'rapidraw'
 
@@ -17,6 +14,8 @@ export type Thumb = { id: string; src?: string; tone: number }
 export type MomentView = {
   moment: string
   count: number
+  // false = the missed-moment check found nothing for it
+  covered: boolean
   bestScore?: number
   hint?: string
   thumbs: Thumb[]
@@ -39,10 +38,10 @@ export type EventView = {
   sources?: number
   moments: MomentView[]
   unsorted: number
+  unsortedThumbs: Thumb[]
   highlights: { moment: string; thumb: Thumb }[]
   highlightCount: number
   clips: { A: Roll; B: Roll }
-  exportSize?: string
   // Pro only
   venue?: string
   client?: string
@@ -50,7 +49,6 @@ export type EventView = {
   paid?: boolean
   status?: EventStatus
   ingest?: { done: number; total: number; folders: string[] }
-  archiveFiles?: number
   xmpWritten?: boolean
 }
 
@@ -66,176 +64,93 @@ export type FinalsView = {
 
 export const STATUSES: EventStatus[] = ['inquiry', 'booked', 'shot', 'editing', 'delivered']
 
-export function placeholderThumbs(prefix: string, n: number): Thumb[] {
-  return Array.from({ length: n }, (_, i) => ({ id: `${prefix}-${i}`, tone: (i * 7 + prefix.length * 3) % 5 }))
-}
+const UNSORTED = 'Unsorted'
+const THUMBS_PER_MOMENT = 6
 
 export function missedMoments(event: EventView): MomentView[] {
-  return event.moments.filter((m) => m.count === 0)
+  return event.moments.filter((m) => !m.covered)
 }
 
-function moment(name: string, count: number, extra: Partial<MomentView> = {}): MomentView {
-  return { moment: name, count, thumbs: placeholderThumbs(name, Math.min(count, 6)), refs: [], ...extra }
+function thumb(m: Media): Thumb {
+  return { id: String(m.id), src: api.previewUrl(m.id), tone: m.id }
 }
 
-function withRefs(name: string, count: number): MomentView {
-  return moment(name, count, { refs: placeholderThumbs(`ref-${name}`, 3) })
-}
-
-function highlightsOf(moments: MomentView[]): EventView['highlights'] {
-  return moments
-    .filter((m) => m.count > 0)
-    .slice(0, 4)
-    .map((m) => ({ moment: m.moment, thumb: m.thumbs[0] }))
-}
-
-const NO_CLIPS = { A: { count: 0, items: [] }, B: { count: 0, items: [] } }
-
-function gig(
-  id: number,
-  name: string,
-  eventType: string,
-  client: string,
-  date: string,
-  venue: string,
-  fee: number,
-  paid: boolean,
-  status: EventStatus,
-): EventView {
-  const template = TEMPLATES.find((t) => t.eventType === eventType)
+async function loadEvent(e: KuhaEvent): Promise<EventView> {
+  const [items, media, coverage] = await Promise.all([
+    api.listShotItems(e.id),
+    api.listMedia(e.id),
+    api.coverage(e.id),
+  ])
+  const byMoment = new Map<string, Media[]>()
+  for (const m of media) byMoment.set(m.moment, [...(byMoment.get(m.moment) ?? []), m])
+  const pro = e.mode === 'pro'
+  const moments = items.map((item): MomentView => {
+    const cov = coverage.find((c) => c.moment === item.moment)
+    const found = byMoment.get(item.moment) ?? []
+    return {
+      moment: item.moment,
+      count: found.length,
+      covered: cov?.covered ?? found.length > 0,
+      bestScore: cov?.best_score,
+      // the raw score is jargon, so only Pro sees it
+      hint: pro && cov && !cov.covered && media.length > 0 ? `Closest match: ${cov.best_score.toFixed(2)}` : undefined,
+      thumbs: found.slice(0, THUMBS_PER_MOMENT).map(thumb),
+      refs: [],
+    }
+  })
+  const unsorted = byMoment.get(UNSORTED) ?? []
+  const highlights = media.filter((m) => m.is_highlight).map((m) => ({ moment: m.moment, thumb: thumb(m) }))
   return {
-    id, mode: 'pro', name, eventType, client, date, venue, fee, paid, status,
-    photos: 0, videos: 0, unsorted: 0, highlights: [], highlightCount: 0, clips: NO_CLIPS,
-    moments: (template?.moments ?? []).map((m) => moment(m, 0)),
+    id: e.id,
+    mode: e.mode,
+    name: e.name,
+    eventType: e.event_type,
+    date: e.date ?? '',
+    photos: media.filter((m) => m.kind === 'photo').length,
+    videos: media.filter((m) => m.kind === 'video').length,
+    moments,
+    unsorted: unsorted.length,
+    unsortedThumbs: unsorted.map(thumb),
+    highlights,
+    highlightCount: highlights.length,
+    clips: { A: { count: 0, items: [] }, B: { count: 0, items: [] } },
+    venue: e.venue ?? undefined,
+    client: e.client ?? undefined,
+    fee: e.fee ?? undefined,
+    paid: e.paid ?? undefined,
+    status: e.status ?? undefined,
   }
 }
 
-const lolaMoments = [
-  moment('Blowing the Candles', 12),
-  moment('Cake', 18),
-  moment('Food / Handaan', 34),
-  moment('Arrival / Guests', 57),
-  moment('Games', 9),
-  moment('Decorations', 22),
-  moment('Group Photo', 0, { hint: "Take one while everyone's still here." }),
-  moment('Gift Opening', 0),
-]
-
-const tripMoments = [
-  moment('Scenery', 188),
-  moment('Beach / Pool', 142),
-  moment('Selfies', 96),
-  moment('Food', 71),
-  moment('Travel / Transport', 64),
-  moment('Group Photo', 38),
-]
-
-const gradMoments = [
-  moment('Toga Portrait', 31),
-  moment('Family with Graduate', 27),
-  moment('Celebration Meal', 26),
-  moment('Marching', 22),
-  moment('Receiving Diploma', 0),
-]
-
-const debutMoments = [
-  withRefs('Grand Entrance', 46),
-  withRefs('18 Roses', 112),
-  withRefs('18 Treasures', 31),
-  withRefs('Cotillion', 88),
-  withRefs('Cake', 14),
-  withRefs('Speech / Toast', 22),
-  moment('Details / Decor', 40),
-  moment('18 Candles', 0, { bestScore: 0.21, hint: 'Closest match: 0.21 · check B-cam card' }),
-  moment('Family Formals', 0),
-]
-
-const SEED_EVENTS: EventView[] = [
-  {
-    id: 1, mode: 'personal', name: "Lola's 80th Birthday", eventType: 'birthday', date: '2026-10-04',
-    photos: 482, videos: 21, sources: 4, moments: lolaMoments, unsorted: 12,
-    highlights: highlightsOf(lolaMoments), highlightCount: 30, exportSize: '2.8 GB',
-    clips: { A: { count: 8, items: [] }, B: { count: 13, items: [] } },
-  },
-  {
-    id: 2, mode: 'personal', name: 'Barkada trip — La Union', eventType: 'trip', date: '2026-08-15', endDate: '2026-08-17',
-    photos: 611, videos: 24, sources: 6, moments: tripMoments, unsorted: 12,
-    highlights: highlightsOf(tripMoments), highlightCount: 30,
-    clips: { A: { count: 5, items: [] }, B: { count: 19, items: [] } },
-  },
-  {
-    id: 3, mode: 'personal', name: "Ate Mika's Graduation", eventType: 'graduation', date: '2026-06-28',
-    photos: 111, videos: 2, sources: 2, moments: gradMoments, unsorted: 5,
-    highlights: highlightsOf(gradMoments), highlightCount: 20,
-    clips: { A: { count: 1, items: [] }, B: { count: 1, items: [] } },
-  },
-  {
-    id: 101, mode: 'pro', name: "Bea's Debut", eventType: 'debut', client: 'Santos family', date: '2026-10-03',
-    venue: 'Casa Alegre, Quezon City', fee: 35000, paid: false, status: 'editing',
-    photos: 1284, videos: 38, moments: debutMoments, unsorted: 0,
-    highlights: highlightsOf(debutMoments), highlightCount: 35,
-    ingest: { done: 1284, total: 1410, folders: ['E:\\DCIM\\100CANON', 'E:\\DCIM\\101CANON', 'F:\\B-CAM'] },
-    exportSize: '68.4 GB', archiveFiles: 1520, xmpWritten: true,
-    clips: {
-      A: {
-        count: 11,
-        items: [
-          { file: 'MVI_0412.MP4', moment: 'Speech / Toast', duration: '2:41' },
-          { file: 'MVI_0398.MP4', moment: '18 Candles', duration: '4:05' },
-          { file: 'C0031.MP4', moment: 'Grand Entrance', duration: '0:52' },
-        ],
-      },
-      B: {
-        count: 27,
-        items: [
-          { file: 'C0044.MP4', moment: 'Details / Decor', duration: '0:18' },
-          { file: 'C0047.MP4', moment: 'Cotillion', duration: '1:36' },
-          { file: 'MVI_0420.MP4', moment: 'Cake', duration: '0:25' },
-        ],
-      },
-    },
-  },
-  gig(102, 'Reyes–Lim Wedding', 'wedding', 'Carla Reyes', '2026-10-17', 'Tagaytay', 65000, false, 'booked'),
-  gig(103, 'Baby Elijah Binyag', 'binyag', 'Dela Cruz family', '2026-09-20', 'Pasig', 18000, true, 'delivered'),
-  gig(104, 'Ana & Paolo Prenup', 'wedding', 'Ana Villanueva', '2026-11-08', 'Intramuros', 22000, false, 'inquiry'),
-  gig(105, "Migo's 7th Birthday", 'birthday', 'Tan family', '2026-09-27', 'Makati', 15000, true, 'delivered'),
-  gig(106, 'Class of 2026 Graduation', 'graduation', 'St. Jude Academy', '2026-10-01', 'Marikina', 31000, false, 'shot'),
-]
-
-const SEED_FINALS: Record<number, FinalsView> = {
-  101: {
-    folder: 'D:\\Gigs\\Bea Debut\\Exports',
-    selects: 64,
-    finals: 62,
-    matchedTotal: 61,
-    unedited: [
-      { file: 'IMG_4471.CR3', rating: 4, moment: '18 Roses', thumb: { id: 'u1', tone: 1 } },
-      { file: 'IMG_4630.CR3', rating: 3, moment: 'Cotillion', thumb: { id: 'u2', tone: 0 } },
-      { file: 'IMG_4802.CR3', rating: 5, moment: 'Speech / Toast', thumb: { id: 'u3', tone: 2 } },
-    ],
-    unmatched: [
-      {
-        file: 'Bea_Debut_Final_047.jpg',
-        note: 'Heavy crop — no RAW matched above the threshold. Pick its RAW by hand.',
-      },
-    ],
-    matched: [
-      { final: 'Bea_Debut_Final_001.jpg', raw: 'IMG_4102.CR3', moment: 'Grand Entrance', hamming: 3 },
-      { final: 'Bea_Debut_Final_002.jpg', raw: 'IMG_4118.CR3', moment: 'Grand Entrance', hamming: 5 },
-      { final: 'Bea_Debut_Final_014.jpg', raw: 'IMG_4466.CR3', moment: '18 Roses', hamming: 2 },
-      { final: 'Bea_Debut_Final_031.jpg', raw: 'IMG_4655.CR3', moment: 'Cotillion', hamming: 7 },
-    ],
-  },
+type State = {
+  events: EventView[]
+  finals: Record<number, FinalsView>
+  sidecarMode: SidecarMode
+  loaded: boolean
+  error: string | null
 }
 
-type State = { events: EventView[]; finals: Record<number, FinalsView>; sidecarMode: SidecarMode }
+const SIDECAR_KEY = 'kuha.sidecarMode'
 
-let state: State = { events: SEED_EVENTS, finals: SEED_FINALS, sidecarMode: 'darktable' }
+function readSidecarMode(): SidecarMode {
+  try {
+    const value = localStorage.getItem(SIDECAR_KEY)
+    return value === 'lightroom' || value === 'rapidraw' ? value : 'darktable'
+  } catch {
+    return 'darktable'
+  }
+}
+
+let state: State = { events: [], finals: {}, sidecarMode: readSidecarMode(), loaded: false, error: null }
 const listeners = new Set<() => void>()
 
 function setState(next: Partial<State>) {
   state = { ...state, ...next }
   for (const listener of listeners) listener()
+}
+
+function patchEvent(id: number, patch: Partial<EventView>) {
+  setState({ events: state.events.map((e) => (e.id === id ? { ...e, ...patch } : e)) })
 }
 
 function subscribe(listener: () => void) {
@@ -245,6 +160,29 @@ function subscribe(listener: () => void) {
 
 function useStore(): State {
   return useSyncExternalStore(subscribe, () => state)
+}
+
+const OFFLINE = "Can't reach KuhaGo's engine. Start it (backend on port 8000), then reload this page."
+
+async function loadAll() {
+  try {
+    const events = await Promise.all((await api.listEvents()).map(loadEvent))
+    setState({ events: events.reverse(), loaded: true, error: null })
+  } catch {
+    setState({ loaded: true, error: OFFLINE })
+  }
+}
+
+async function reloadEvent(id: number) {
+  const fresh = await loadEvent((await api.listEvents()).find((e) => e.id === id)!)
+  setState({ events: state.events.map((e) => (e.id === id ? fresh : e)) })
+}
+
+void loadAll()
+
+export function useStatus(): { loaded: boolean; error: string | null } {
+  const { loaded, error } = useStore()
+  return { loaded, error }
 }
 
 export function useEvents(mode: Mode): EventView[] {
@@ -264,56 +202,95 @@ export function useSidecarMode(): SidecarMode {
 }
 
 export function setSidecarMode(sidecarMode: SidecarMode) {
+  try {
+    localStorage.setItem(SIDECAR_KEY, sidecarMode)
+  } catch {
+    // storage unavailable: the choice still applies for this session
+  }
   setState({ sidecarMode })
 }
 
-export function createEvent(input: {
+export async function createEvent(input: {
   mode: Mode
   name: string
   eventType: string
   date: string
   client?: string
-}): number {
-  const id = Math.max(...state.events.map((e) => e.id)) + 1
-  const template = TEMPLATES.find((t) => t.eventType === input.eventType)
-  const event: EventView = {
-    ...input,
-    id,
-    photos: 0, videos: 0, unsorted: 0, highlights: [], highlightCount: 0, clips: NO_CLIPS,
-    moments: (template?.moments ?? []).map((m) => moment(m, 0)),
-    ...(input.mode === 'pro' ? { paid: false, status: 'inquiry' as const } : {}),
-  }
-  setState({ events: [event, ...state.events] })
-  return id
+}): Promise<number> {
+  const created = await api.createEvent({
+    mode: input.mode,
+    name: input.name,
+    event_type: input.eventType,
+    date: input.date,
+    ...(input.mode === 'pro' ? { client: input.client || null, paid: false, status: 'inquiry' as const } : {}),
+  })
+  await api.applyTemplate(created.id, input.eventType)
+  setState({ events: [await loadEvent(created), ...state.events] })
+  return created.id
 }
 
 export function setStatus(id: number, status: EventStatus) {
-  setState({ events: state.events.map((e) => (e.id === id ? { ...e, status } : e)) })
+  patchEvent(id, { status })
+  api.updateEvent(id, { status }).catch(() => reloadEvent(id))
 }
 
-export const NOT_CONNECTED = "KuhaGo's engine isn't connected yet, so this can't run on real files."
+// Organize one or more folders; progress lands on event.ingest until the job ends.
+export async function startIngest(eventId: number, folders: string[]): Promise<void> {
+  const { job_id } = await api.startIngest(eventId, folders)
+  patchEvent(eventId, { ingest: { done: 0, total: 0, folders } })
+  try {
+    await new Promise<void>((resolve, reject) => {
+      watchJob(
+        job_id,
+        (p) => {
+          if (p.stage === 'error') reject(new Error(`Organizing stopped: ${p.message ?? 'unknown error'}`))
+          else if (p.stage !== 'done') patchEvent(eventId, { ingest: { done: p.done, total: p.total, folders } })
+        },
+        resolve,
+        () => reject(new Error('Lost touch with the engine while organizing.')),
+      )
+    })
+  } finally {
+    // reload first: clearing the progress early would flash the old, empty event
+    await reloadEvent(eventId).catch(() => undefined)
+    patchEvent(eventId, { ingest: undefined })
+  }
+}
+
+export async function searchMedia(eventId: number, query: string): Promise<Thumb[]> {
+  return (await api.search(query, eventId)).map(thumb)
+}
+
+export const NOT_CONNECTED = "KuhaGo's engine can't do this yet."
 
 function notConnected(): Promise<never> {
   return Promise.reject(new Error(NOT_CONNECTED))
 }
 
-// These need the real backend (ingest, CLIP search, ExifTool, native folder picker).
-export const startIngest = (_eventId: number, _folders: string[]) => notConnected()
-export const searchMedia = (_eventId: number, _query: string) => notConnected()
+// No backend route yet (example photos, ExifTool, finals); a browser can't open a native folder picker.
 export const addExamples = (_eventId: number) => notConnected()
 export const writeXmp = (_eventId: number, _mode: SidecarMode) => notConnected()
 export const rescanFinals = (_eventId: number) => notConnected()
 export const pickFolder = () => notConnected()
 
-// Sample-data stand-in for the export job's SSE progress: counts up without touching disk.
-// Returns a cancel function.
-export function runExport(total: number, onProgress: (done: number) => void): () => void {
-  let done = 0
-  const step = Math.max(1, Math.ceil(total / 40))
-  const timer = setInterval(() => {
-    done = Math.min(total, done + step)
-    onProgress(done)
-    if (done >= total) clearInterval(timer)
-  }, 80)
-  return () => clearInterval(timer)
+export const loadExportPlan = (eventId: number): Promise<ExportPlan> => api.exportPlan(eventId)
+
+// Copy the event into dest on the engine; resolves when the copy job ends.
+export async function runExport(
+  eventId: number,
+  dest: string,
+  onProgress: (done: number, total: number) => void,
+): Promise<void> {
+  const { job_id } = await api.startExport(eventId, dest)
+  await new Promise<void>((resolve, reject) => {
+    watchJob(
+      job_id,
+      (p) => {
+        if (p.stage === 'error') reject(new Error(`Copying stopped: ${p.message ?? 'unknown error'}`))
+        else if (p.stage !== 'done') onProgress(p.done, p.total)
+      },
+      resolve,
+      () => reject(new Error('Lost touch with the engine while copying.')),
+    )
+  })
 }

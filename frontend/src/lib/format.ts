@@ -9,6 +9,7 @@ const LIST = new Intl.ListFormat('en', { type: 'conjunction' })
 
 // "Oct 4, 2026", or "Aug 15–17, 2026" for a multi-day event in one month.
 export function formatDate(date: string, endDate?: string): string {
+  if (!date) return 'No date'
   const start = parseISODate(date)
   if (!endDate || endDate === date) return FULL.format(start)
   const end = parseISODate(endDate)

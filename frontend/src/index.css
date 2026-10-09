@@ -1,10 +1,18 @@
 @import 'tailwindcss';
 
-/* System fonts only: the app must run fully offline (no CDN assets). */
+/* Fonts are bundled from npm (see main.tsx): the app must run fully offline, no CDN assets. */
 @theme {
-  --font-sans: ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: 'Instrument Sans Variable', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  --font-display: 'Bricolage Grotesque Variable', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, Consolas, monospace;
 }
 
 body {
-  @apply bg-neutral-50 text-neutral-900 antialiased;
+  @apply bg-white text-neutral-950 antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
 }

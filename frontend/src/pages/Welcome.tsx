@@ -1,40 +1,53 @@
+import { Owl, Page } from '../components/ui'
 import { useMode } from '../lib/mode'
+import { btnPrimary, btnSecondary } from '../lib/styles'
 import type { Mode } from '../lib/terms'
 
-const CHOICES: { mode: Mode; title: string; body: string }[] = [
+const CHOICES: { mode: Mode; kicker: string; title: string; body: string; cta: string; button: string }[] = [
   {
     mode: 'personal',
+    kicker: 'Personal',
     title: "I'm organizing my own photos",
-    body: 'Birthdays, Noche Buena, trips, graduations. Phone photos and videos.',
+    body: 'Birthdays, Noche Buena, barkada trips, graduations. Phone photos and videos.',
+    cta: 'Get started',
+    button: btnPrimary,
   },
   {
     mode: 'pro',
+    kicker: 'Pro',
     title: 'I shoot for clients',
-    body: 'Paid gigs with RAW files, camera video, and your editing app.',
+    body: 'Debuts, weddings, binyag. RAW files, shot lists, A-roll / B-roll, XMP for your editor.',
+    cta: 'Set up Pro',
+    button: btnSecondary,
   },
 ]
 
-// Placeholder layout until the wireframes land; the mode pick itself is functional.
 export default function Welcome() {
   const { setMode } = useMode()
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-6 p-6">
-      <h1 className="text-3xl font-semibold">Kuha</h1>
-      <p className="text-neutral-600">How will you use Kuha? You can change this later in Settings.</p>
-      <div className="grid gap-4 sm:grid-cols-2">
+    <Page width="max-w-4xl" right="Offline · nothing leaves your laptop">
+      <div className="flex flex-col items-center pt-8 text-center">
+        <Owl className="h-24 w-24" />
+        <h1 className="mt-6 text-5xl font-extrabold tracking-tight sm:text-6xl">Every moment, sorted.</h1>
+        <p className="mt-6 max-w-xl text-lg text-neutral-600">
+          Point KuhaGo at your party photos and videos. It groups them into moments, picks the best shots, and
+          tells you what nobody got a photo of.
+        </p>
+      </div>
+      <div className="mt-12 grid gap-5 sm:grid-cols-2">
         {CHOICES.map((choice) => (
-          <button
-            key={choice.mode}
-            type="button"
-            onClick={() => setMode(choice.mode)}
-            className="rounded-lg border border-neutral-300 bg-white p-5 text-left hover:border-neutral-900"
-          >
-            <span className="block font-medium">{choice.title}</span>
-            <span className="mt-1 block text-sm text-neutral-600">{choice.body}</span>
-          </button>
+          <section key={choice.mode} className="rounded-2xl border border-neutral-400 p-7">
+            <p className="text-sm font-medium uppercase tracking-wide text-neutral-600">{choice.kicker}</p>
+            <h2 className="mt-3 text-2xl font-bold">{choice.title}</h2>
+            <p className="mt-3 text-neutral-600">{choice.body}</p>
+            <button type="button" onClick={() => setMode(choice.mode)} className={`mt-5 ${choice.button} text-base`}>
+              {choice.cta}
+            </button>
+          </section>
         ))}
       </div>
-    </main>
+      <p className="mt-10 text-center text-sm text-neutral-600">You can switch modes any time in Settings.</p>
+    </Page>
   )
 }

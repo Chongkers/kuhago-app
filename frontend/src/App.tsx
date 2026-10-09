@@ -2,26 +2,22 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ModeProvider, useMode } from './lib/mode'
 import EventDetail from './pages/EventDetail'
 import Events from './pages/Events'
+import Export from './pages/Export'
+import Finals from './pages/Finals'
 import Settings from './pages/Settings'
 import Welcome from './pages/Welcome'
 
 function AppRoutes() {
   const { mode } = useMode()
 
-  // First launch: nothing is reachable until a mode is picked.
-  if (!mode) {
-    return (
-      <Routes>
-        <Route path="*" element={<Welcome />} />
-      </Routes>
-    )
-  }
-
   return (
     <Routes>
-      <Route path="/" element={<Events />} />
+      {/* First launch: the home screen is the mode pick until one is chosen. */}
+      <Route path="/" element={mode ? <Events /> : <Welcome />} />
       <Route path="/events/:eventId" element={<EventDetail />} />
-      <Route path="/settings" element={<Settings />} />
+      <Route path="/events/:eventId/export" element={<Export />} />
+      <Route path="/events/:eventId/finals" element={<Finals />} />
+      <Route path="/settings" element={mode ? <Settings /> : <Navigate to="/" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

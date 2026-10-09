@@ -6,10 +6,15 @@ export type Mode = 'personal' | 'pro'
 export type TermKey =
   | 'event'
   | 'events'
+  | 'eventsTitle'
+  | 'newEvent'
+  | 'moment'
+  | 'frame'
   | 'shotItems'
   | 'refs'
   | 'rollA'
   | 'rollB'
+  | 'clips'
   | 'selects'
   | 'coverage'
   | 'export'
@@ -17,10 +22,15 @@ export type TermKey =
 const TERMS: Record<TermKey, Record<Mode, string>> = {
   event: { personal: 'Event', pro: 'Gig' },
   events: { personal: 'Events', pro: 'Gigs' },
+  eventsTitle: { personal: 'Your events', pro: 'Gigs' },
+  newEvent: { personal: 'New event', pro: 'New gig' },
+  moment: { personal: 'moment', pro: 'shot' },
+  frame: { personal: 'photo', pro: 'frame' },
   shotItems: { personal: 'Moments checklist', pro: 'Shot list' },
   refs: { personal: 'Example photos', pro: 'References' },
   rollA: { personal: 'Talking clips', pro: 'A-roll' },
   rollB: { personal: 'Scenery clips', pro: 'B-roll' },
+  clips: { personal: 'Talking & scenery clips', pro: 'A-roll / B-roll' },
   selects: { personal: 'Favorites', pro: 'Selects' },
   coverage: { personal: 'Missed moments', pro: 'Coverage' },
   export: { personal: 'Export folders', pro: 'Archive' },

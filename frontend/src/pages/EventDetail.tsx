@@ -1,21 +1,14 @@
-import { Link, useParams } from 'react-router-dom'
-import { useMode } from '../lib/mode'
-import { term } from '../lib/terms'
+import { useParams } from 'react-router-dom'
+import { useEvent } from '../api/data'
+import PersonalEvent from '../components/PersonalEvent'
+import ProGig from '../components/ProGig'
+import { NotFound } from '../components/ui'
 
-// Shell only: layout and content come from the wireframes.
+// The layout follows the event's own mode, not the app-wide one.
 export default function EventDetail() {
   const { eventId } = useParams()
-  const { mode } = useMode()
-  if (!mode) return null
+  const event = useEvent(Number(eventId))
 
-  return (
-    <main className="mx-auto max-w-5xl p-6">
-      <Link to="/" className="text-sm text-neutral-600 hover:text-neutral-900">
-        ← {term('events', mode)}
-      </Link>
-      <h1 className="mt-2 text-2xl font-semibold">
-        {term('event', mode)} #{eventId}
-      </h1>
-    </main>
-  )
+  if (!event) return <NotFound />
+  return event.mode === 'pro' ? <ProGig key={event.id} event={event} /> : <PersonalEvent key={event.id} event={event} />
 }

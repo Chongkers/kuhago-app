@@ -1,57 +1,169 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { askOwl, type EventView } from '../api/data'
+import type { ChatMessage } from '../api/client'
+import { addMoment, askOwl, owlModel, type EventView, type Thumb as ThumbData } from '../api/data'
 import { usePrefs } from '../lib/profile'
 import { input } from '../lib/styles'
-import { Owl } from './ui'
+import { term } from '../lib/terms'
+import { useAction } from '../lib/useAction'
+import { Notice, Owl, Thumb } from './ui'
 
-type Message = { from: 'you' | 'owl'; text: string }
+// failed: the reply is the reason nothing came back, so it is shown but never sent on as conversation.
+// moments: ones the user can add with a click; photos: what matched when they asked to find something.
+type Message = { from: 'you' | 'owl'; text: string; failed?: boolean; moments?: string[]; photos?: ThumbData[] }
 
 const SUGGESTIONS = {
-  personal: ['What did we miss?', 'Find lola with the cake', 'Write a caption for the GC', 'Summarize the day'],
-  pro: ['Which shots am I missing before I leave?', 'Draft client delivery note', 'List unedited selects', 'Suggest A-roll for the SDE'],
+  personal: ['What did we miss?', 'Suggest themes for these photos', 'Find the group photos', 'Write a caption for the family group chat'],
+  pro: ['Which shots am I missing?', 'Suggest moments to add to the shot list', 'Find the wide shots', 'Draft a client delivery note'],
 }
 
-// Chat with the local assistant. Replies come from the engine; until it can run the assistant,
-// the failure is shown as the owl's reply so the person knows why nothing came back.
+// Conversations are kept in this browser, one per event, so they are still there after a reload.
+const KEEP = 60
+const storageKey = (eventId: number) => `kuhago.chat.${eventId}`
+
+function stored(eventId: number | undefined): Message[] {
+  if (eventId === undefined) return []
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(storageKey(eventId)) ?? '[]')
+    return Array.isArray(saved) ? (saved as Message[]) : []
+  } catch {
+    return [] // storage blocked or not JSON: start a new conversation
+  }
+}
+
+function store(eventId: number | undefined, messages: Message[]) {
+  if (eventId === undefined) return
+  try {
+    if (messages.length === 0) localStorage.removeItem(storageKey(eventId))
+    else localStorage.setItem(storageKey(eventId), JSON.stringify(messages.slice(-KEEP)))
+  } catch {
+    // storage full or blocked: the chat still works, it just isn't kept
+  }
+}
+
+// Chat with the local assistant about one event. A failure is shown as its reply so the person knows
+// why nothing came back.
 export function useOwlChat(event?: EventView) {
-  const [messages, setMessages] = useState<Message[]>([])
+  const { model } = usePrefs()
+  const eventId = event?.id
+  const [chat, setChat] = useState({ eventId, messages: stored(eventId) })
   const [busy, setBusy] = useState(false)
+  // a conversation is about one event: switching events shows that event's own
+  if (chat.eventId !== eventId) setChat({ eventId, messages: stored(eventId) })
+  const { messages } = chat
+
+  // a reply lands in the conversation that was asked, even if another event is on screen by then
+  function add(to: number | undefined, message: Message) {
+    store(to, [...stored(to), message])
+    setChat((c) => (c.eventId === to ? { ...c, messages: [...c.messages, message] } : c))
+  }
 
   async function send(text: string) {
     const prompt = text.trim()
     if (!prompt || busy) return
-    setMessages((m) => [...m, { from: 'you', text: prompt }])
+    const history: ChatMessage[] = [...messages.filter((m) => !m.failed), { from: 'you' as const, text: prompt }].map((m) => ({
+      role: m.from === 'you' ? 'user' : 'assistant',
+      content: m.text,
+    }))
+    add(eventId, { from: 'you', text: prompt })
     setBusy(true)
     try {
-      const reply = (await askOwl(event?.id, prompt)) as unknown as string
-      setMessages((m) => [...m, { from: 'owl', text: reply }])
+      const { reply, moments, photos } = await askOwl(eventId, history, model)
+      add(eventId, { from: 'owl', text: reply, moments, photos })
     } catch (e) {
-      setMessages((m) => [...m, { from: 'owl', text: (e as Error).message }])
+      add(eventId, { from: 'owl', text: (e as Error).message, failed: true })
     } finally {
       setBusy(false)
     }
   }
 
-  return { messages, busy, send }
+  function clear() {
+    store(eventId, [])
+    setChat({ eventId, messages: [] })
+  }
+
+  return { event, messages, busy, send, clear }
 }
 
 type Chat = ReturnType<typeof useOwlChat>
 
-export function Bubbles({ messages }: { messages: Message[] }) {
+// The moments a reply offers. One click adds one and re-sorts the photos; it then reads as added for as long
+// as it is on the list.
+function MomentChips({ event, moments }: { event: EventView; moments: string[] }) {
+  const prefs = usePrefs()
+  const { error, run } = useAction()
+  const [adding, setAdding] = useState<string | null>(null)
+  const have = new Set(event.moments.map((m) => m.moment.toLowerCase()))
+
+  function add(name: string) {
+    setAdding(name)
+    run(async () => {
+      try {
+        // with a model, the engine describes what such a photo looks like, which is what the sorting matches on
+        const model = (await owlModel(prefs.model)) ?? undefined
+        await addMoment(event.id, name, { model })
+      } finally {
+        setAdding(null)
+      }
+    })
+  }
+
+  return (
+    <div className="mt-2">
+      <div className="flex flex-wrap gap-1.5">
+        {moments.map((name) => {
+          const added = have.has(name.toLowerCase())
+          return (
+            <button
+              key={name}
+              type="button"
+              disabled={added || adding !== null}
+              onClick={() => add(name)}
+              className="rounded-full border border-neutral-950 bg-white px-3 py-1 text-sm font-medium hover:bg-neutral-950 hover:text-white disabled:border-neutral-300 disabled:bg-neutral-100 disabled:text-neutral-600"
+            >
+              {added ? `✓ ${name}` : adding === name ? `Adding ${name}…` : `+ ${name}`}
+            </button>
+          )
+        })}
+      </div>
+      <Notice>{error}</Notice>
+    </div>
+  )
+}
+
+export function Bubbles({ chat }: { chat: Chat }) {
+  const says = 'rounded-2xl bg-neutral-100 px-4 py-2.5 text-sm whitespace-pre-wrap'
   return (
     <div className="space-y-3" aria-live="polite">
-      {messages.map((m, i) =>
+      {chat.messages.map((m, i) =>
         m.from === 'you' ? (
-          <p key={i} className="ml-auto w-fit max-w-[85%] rounded-2xl bg-neutral-950 px-4 py-2.5 text-sm text-white">
+          <p key={i} className="ml-auto w-fit max-w-[85%] rounded-2xl bg-neutral-950 px-4 py-2.5 text-sm whitespace-pre-wrap text-white">
             {m.text}
           </p>
         ) : (
           <div key={i} className="flex items-start gap-2.5">
             <Owl className="mt-1 h-6 w-6 shrink-0" />
-            <p className="max-w-[85%] rounded-2xl bg-neutral-100 px-4 py-2.5 text-sm">{m.text}</p>
+            <div className="max-w-[85%] min-w-0">
+              <p className={`${says} w-fit`}>{m.text}</p>
+              {m.moments && m.moments.length > 0 && chat.event && <MomentChips event={chat.event} moments={m.moments} />}
+              {m.photos && m.photos.length > 0 && (
+                <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
+                  {m.photos.map((photo) => (
+                    <a key={photo.id} href={photo.full} target="_blank" rel="noreferrer" title={photo.name}>
+                      <Thumb thumb={photo} className="aspect-square w-full rounded-md" />
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         ),
+      )}
+      {chat.busy && (
+        <div role="status" className="flex items-start gap-2.5">
+          <Owl className="mt-1 h-6 w-6 shrink-0" />
+          <p className={`${says} text-neutral-600`}>Thinking…</p>
+        </div>
       )}
     </div>
   )
@@ -61,7 +173,7 @@ export function Suggestions({ mode, chat }: { mode: 'personal' | 'pro'; chat: Ch
   return (
     <div className="flex flex-wrap gap-2">
       {SUGGESTIONS[mode].map((s) => (
-        <button key={s} type="button" onClick={() => chat.send(s)} className="rounded-full border border-neutral-400 px-3.5 py-1.5 text-sm hover:border-neutral-950">
+        <button key={s} type="button" disabled={chat.busy} onClick={() => chat.send(s)} className="rounded-full border border-neutral-400 px-3.5 py-1.5 text-sm hover:border-neutral-950 disabled:opacity-50">
           {s}
         </button>
       ))}
@@ -86,6 +198,15 @@ export function Composer({ chat, placeholder }: { chat: Chat; placeholder: strin
   )
 }
 
+export function ClearChat({ chat }: { chat: Chat }) {
+  if (chat.messages.length === 0) return null
+  return (
+    <button type="button" disabled={chat.busy} onClick={chat.clear} className="text-sm text-neutral-600 underline disabled:opacity-50">
+      Clear this chat
+    </button>
+  )
+}
+
 // The compact card on an event page.
 export default function OwlCard({ event }: { event: EventView }) {
   const prefs = usePrefs()
@@ -96,16 +217,17 @@ export default function OwlCard({ event }: { event: EventView }) {
     <section className="space-y-3 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between">
         <h2 className="flex items-center gap-2 text-xl font-bold">
-          <Owl className="h-7 w-7" /> Ask the owl
+          <Owl className="h-7 w-7" /> {term('owl', event.mode)}
         </h2>
-        <Link to="/owl" className="text-sm font-medium underline">
+        <Link to={`/events/${event.id}/owl`} className="text-sm font-medium underline">
           Open
         </Link>
       </div>
-      <p className="w-fit rounded-full border border-neutral-400 px-2.5 py-0.5 font-mono text-xs">Ollama · {prefs.model} · local</p>
-      <Bubbles messages={chat.messages} />
+      <p className="w-fit rounded-full border border-neutral-400 px-2.5 py-0.5 font-mono text-xs">Ollama · on this laptop</p>
+      <Bubbles chat={chat} />
       <Suggestions mode={event.mode} chat={chat} />
       <Composer chat={chat} placeholder="Ask about this event…" />
+      <ClearChat chat={chat} />
     </section>
   )
 }

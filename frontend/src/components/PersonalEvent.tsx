@@ -1,20 +1,52 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { addExamples, searchMedia, type EventView, type Thumb as ThumbData } from '../api/data'
+import { addExamples, removeMedia, searchMedia, type EventView, type Thumb as ThumbData } from '../api/data'
 import { count, formatDate } from '../lib/format'
 import { backLink, btnPrimary, btnSecondary, card, input, panel } from '../lib/styles'
 import { templateLabel } from '../lib/templates'
 import { rollLabel, term } from '../lib/terms'
 import { useAction } from '../lib/useAction'
 import CoverageCard from './CoverageCard'
+import FirstSteps from './FirstSteps'
 import OrganizeCard from './OrganizeCard'
 import OwlCard from './OwlChat'
+import PhotoViewer from './PhotoViewer'
 import { ImagePicker, Notice, Owl, Thumb } from './ui'
 import { Page } from './Shell'
 
 type Tab = 'moments' | 'highlights' | 'clips' | 'unsorted'
+// opens the photo viewer on one photo of a grid
+type Open = (thumbs: ThumbData[], index: number) => void
 
-function Moments({ event }: { event: EventView }) {
+// A grid photo that opens large when clicked.
+function Tile({ thumbs, index, open, className }: { thumbs: ThumbData[]; index: number; open: Open; className: string }) {
+  return (
+    <button
+      type="button"
+      onClick={() => open(thumbs, index)}
+      aria-label={`View ${thumbs[index].name ?? 'photo'}`}
+      className="block w-full cursor-zoom-in overflow-hidden rounded-lg hover:opacity-80"
+    >
+      <Thumb thumb={thumbs[index]} className={className} />
+    </button>
+  )
+}
+
+function Moments({ event, open }: { event: EventView; open: Open }) {
+  // everything was added but nothing fit the list: say what to do instead of showing an empty tab
+  if (event.moments.every((m) => m.count === 0)) {
+    return (
+      <section className="rounded-2xl border-2 border-neutral-950 p-5" role="status">
+        <h2 className="text-xl font-bold">Nothing is sorted yet</h2>
+        <p className="mt-1 text-sm">
+          All {count(event.unsorted, 'photo')} went to Unsorted because{' '}
+          {event.moments.length === 0 ? 'your list is empty' : 'none of them fit what is on your list'}. Add the themes
+          and subjects these photos show in the <strong>{term('checklistTitle', event.mode)}</strong> section: click{' '}
+          <strong>Edit list</strong> there, and KuhaGo sorts them again right away.
+        </p>
+      </section>
+    )
+  }
   return (
     <div className="space-y-7">
       {event.moments
@@ -26,8 +58,8 @@ function Moments({ event }: { event: EventView }) {
               <span className="text-xs text-neutral-600">{count(m.count, 'photo')}</span>
             </div>
             <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
-              {m.thumbs.map((thumb) => (
-                <Thumb key={thumb.id} thumb={thumb} className="aspect-square w-full rounded-lg" />
+              {m.thumbs.map((thumb, i) => (
+                <Tile key={thumb.id} thumbs={m.thumbs} index={i} open={open} className="aspect-square w-full" />
               ))}
             </div>
           </section>
@@ -36,7 +68,8 @@ function Moments({ event }: { event: EventView }) {
   )
 }
 
-function Highlights({ event }: { event: EventView }) {
+function Highlights({ event, open }: { event: EventView; open: Open }) {
+  const thumbs = event.highlights.map((h) => h.thumb)
   return (
     <section>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -44,10 +77,10 @@ function Highlights({ event }: { event: EventView }) {
         <span className="text-xs text-neutral-600">Best 5 per moment · blurry and repeat shots hidden</span>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {event.highlights.map((h) => (
+        {event.highlights.map((h, i) => (
           <div key={h.thumb.id} className="relative">
-            <Thumb thumb={h.thumb} className="aspect-[4/3] w-full rounded-lg" />
-            <span className="absolute bottom-2 left-2 rounded bg-neutral-800/80 px-1.5 py-0.5 text-xs text-white">
+            <Tile thumbs={thumbs} index={i} open={open} className="aspect-[4/3] w-full" />
+            <span className="pointer-events-none absolute bottom-2 left-2 rounded bg-neutral-800/80 px-1.5 py-0.5 text-xs text-white">
               {h.moment}
             </span>
           </div>
@@ -89,6 +122,18 @@ export default function PersonalEvent({ event }: { event: EventView }) {
   const [exampleMoment, setExampleMoment] = useState('')
   const moment = event.moments.find((m) => m.moment === exampleMoment) ?? event.moments[0]
   const empty = event.photos + event.videos === 0 || !!event.ingest
+  const [viewing, setViewing] = useState<{ thumbs: ThumbData[]; index: number } | null>(null)
+  const open: Open = (thumbs, index) => setViewing({ thumbs, index })
+
+  // the viewer moves on to the next photo of the grid it was opened from, and closes after the last one
+  async function remove(thumb: ThumbData) {
+    await removeMedia(event.id, thumb.id)
+    setResults((list) => list?.filter((t) => t.id !== thumb.id) ?? null)
+    setViewing((v) => {
+      const thumbs = v?.thumbs.filter((t) => t.id !== thumb.id) ?? []
+      return v && thumbs.length > 0 ? { thumbs, index: Math.min(v.index, thumbs.length - 1) } : null
+    })
+  }
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'moments', label: 'Moments' },
@@ -122,6 +167,15 @@ export default function PersonalEvent({ event }: { event: EventView }) {
         </Link>
       }
     >
+      {viewing && (
+        <PhotoViewer
+          thumbs={viewing.thumbs}
+          index={viewing.index}
+          onIndex={(index) => setViewing({ thumbs: viewing.thumbs, index })}
+          onClose={() => setViewing(null)}
+          onRemove={remove}
+        />
+      )}
       <Notice>{search.error}</Notice>
       {results && (
         <section className={`${card} mb-6 p-4`}>
@@ -132,8 +186,8 @@ export default function PersonalEvent({ event }: { event: EventView }) {
             </button>
           </div>
           <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
-            {results.map((thumb) => (
-              <Thumb key={thumb.id} thumb={thumb} className="aspect-square w-full rounded-lg" />
+            {results.map((thumb, i) => (
+              <Tile key={thumb.id} thumbs={results} index={i} open={open} className="aspect-square w-full" />
             ))}
           </div>
         </section>
@@ -147,6 +201,7 @@ export default function PersonalEvent({ event }: { event: EventView }) {
         {count(event.videos, 'video')}
         {event.sources ? ` from ${count(event.sources, 'phone')}` : ''}
       </p>
+      <FirstSteps event={event} />
 
       <div className="mt-6 flex gap-1 overflow-x-auto border-b border-neutral-200" role="tablist">
         {tabs.map((t) => (
@@ -169,17 +224,24 @@ export default function PersonalEvent({ event }: { event: EventView }) {
         <div className="space-y-9">
           {!empty && (
             <>
-              {tab === 'moments' && <Moments event={event} />}
-              {(tab === 'moments' || tab === 'highlights') && <Highlights event={event} />}
+              {tab === 'moments' && <Moments event={event} open={open} />}
+              {(tab === 'moments' || tab === 'highlights') && <Highlights event={event} open={open} />}
               {(tab === 'moments' || tab === 'clips') && <Clips event={event} />}
               {tab === 'unsorted' && (
                 <section>
                   <p className="text-sm text-neutral-600">
-                    KuhaGo wasn't sure about these, so it didn't guess.
+                    {event.moments.length === 0
+                      ? 'Your list is empty, so there is nothing to sort these into yet.'
+                      : "KuhaGo wasn't sure about these, so it didn't guess."}
                   </p>
+                  {event.unsorted > 0 && (
+                    <p className="mt-1 text-sm font-semibold">
+                      To sort them, click Edit list and add a theme or subject that fits, e.g. "Band on stage".
+                    </p>
+                  )}
                   <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
-                    {event.unsortedThumbs.map((thumb) => (
-                      <Thumb key={thumb.id} thumb={thumb} className="aspect-square w-full rounded-lg" />
+                    {event.unsortedThumbs.map((thumb, i) => (
+                      <Tile key={thumb.id} thumbs={event.unsortedThumbs} index={i} open={open} className="aspect-square w-full" />
                     ))}
                   </div>
                 </section>

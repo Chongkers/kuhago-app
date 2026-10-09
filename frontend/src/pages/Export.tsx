@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import type { ExportPlan } from '../api/client'
-import { loadExportPlan, missedMoments, runExport, setStatus, useEvent, useFinals } from '../api/data'
+import { loadExportPlan, missedMoments, pickFolder, runExport, setStatus, useEvent, useFinals } from '../api/data'
 import { Badge, Notice, ProgressBar } from '../components/ui'
 import { NotFound, Page } from '../components/Shell'
 import { planRows } from '../lib/exportPlan'
 import { count, listOf } from '../lib/format'
-import { backLink, btnPrimary, card, input, panel } from '../lib/styles'
+import { backLink, btnPrimary, btnSecondary, card, input, panel } from '../lib/styles'
 import { term } from '../lib/terms'
 import { useAction } from '../lib/useAction'
 
@@ -22,6 +22,7 @@ export default function Export() {
   const [copying, setCopying] = useState(false)
   const [markDelivered, setMarkDelivered] = useState(true)
   const copier = useAction()
+  const picker = useAction()
   const mediaCount = event ? event.photos + event.videos : 0
 
   // the backend's dry run; refetched when organizing adds media
@@ -35,6 +36,13 @@ export default function Export() {
   const total = plan?.copies.length ?? 0
   const missed = missedMoments(event)
   const eventPath = `/events/${event.id}`
+
+  function browse() {
+    picker.run(async () => {
+      const path = await pickFolder()
+      if (path) setDest(path)
+    })
+  }
 
   function start() {
     if (!event) return
@@ -66,13 +74,19 @@ export default function Export() {
           <label htmlFor="dest" className="font-display font-semibold">
             {pro ? 'Archive to' : 'Save to'}
           </label>
-          <input
-            id="dest"
-            value={dest}
-            onChange={(e) => setDest(e.target.value)}
-            placeholder={pro ? 'X:\\Archive\\2026' : 'D:\\Photos\\Family'}
-            className={`${input} mt-2 font-mono`}
-          />
+          <div className="mt-2 flex gap-2">
+            <input
+              id="dest"
+              value={dest}
+              onChange={(e) => setDest(e.target.value)}
+              placeholder={pro ? 'X:\\Archive\\2026' : 'D:\\Photos\\Family'}
+              className={`${input} font-mono`}
+            />
+            <button type="button" onClick={browse} className={`${btnSecondary} shrink-0`}>
+              Browse…
+            </button>
+          </div>
+          <Notice>{picker.error}</Notice>
 
           <section className={`${panel} mt-4 p-5`}>
             <div className="flex flex-wrap items-baseline justify-between gap-2">

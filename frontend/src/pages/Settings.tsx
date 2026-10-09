@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { clearOwlHistory, clearPreviewCache, moveLibrary, setSidecarMode, testOllama, useSidecarMode } from '../api/data'
+import { setSidecarMode, testOllama, useSidecarMode } from '../api/data'
 import { SIDECAR_OPTIONS } from '../components/ProGig'
 import { Page } from '../components/Shell'
 import { Avatar, Badge, ModeToggle, Notice } from '../components/ui'
@@ -99,7 +99,7 @@ function RecoveryCode() {
 const SECTIONS = [
   { id: 'profile', label: 'Profile' },
   { id: 'mode', label: 'Mode' },
-  { id: 'owl', label: 'Ask the owl' },
+  { id: 'owl', label: 'Ask KuhaGo' },
   { id: 'library', label: 'Library & storage' },
   { id: 'pro', label: 'Pro workflow', pro: true },
   { id: 'appearance', label: 'Appearance' },
@@ -111,10 +111,8 @@ export default function Settings() {
   const { active, updatePrefs, update, logout, remove } = useProfiles()
   const sidecarMode = useSidecarMode()
   const owl = useAction()
-  const library = useAction()
-  const privacy = useAction()
+  const [owlFound, setOwlFound] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [libraryDraft, setLibraryDraft] = useState<string | null>(null)
   if (!active) return null
   const { prefs } = active
   const pro = mode === 'pro'
@@ -164,23 +162,33 @@ export default function Settings() {
           <p className="text-xs text-neutral-600">New events open in this mode. Each event can still be switched on its own page.</p>
         </Section>
 
-        <Section id="owl" title="Ask the owl">
+        <Section id="owl" title="Ask KuhaGo">
           <label className="flex items-center justify-between gap-4 text-sm">
             Turn on the assistant
             <input type="checkbox" className="h-5 w-5 accent-neutral-950" checked={prefs.owlEnabled} onChange={(e) => updatePrefs({ owlEnabled: e.target.checked })} />
           </label>
-          <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
-            <Field label="Ollama address">
-              <input value={prefs.ollamaUrl} onChange={(e) => updatePrefs({ ollamaUrl: e.target.value })} className={`${input} font-mono`} />
-            </Field>
-            <Field label="Model">
-              <input value={prefs.model} onChange={(e) => updatePrefs({ model: e.target.value })} className={`${input} font-mono`} />
-            </Field>
-          </div>
+          <Field label="Model">
+            <input value={prefs.model} onChange={(e) => updatePrefs({ model: e.target.value })} className={`${input} font-mono`} />
+          </Field>
+          <p className="text-xs text-neutral-600">
+            The assistant is Ollama running on this laptop. If this model isn't installed, KuhaGo uses one that is.
+          </p>
           <div>
-            <button type="button" className={btnSecondary} onClick={() => owl.run(() => testOllama(prefs.ollamaUrl))}>
+            <button
+              type="button"
+              className={btnSecondary}
+              onClick={() => {
+                setOwlFound(null)
+                owl.run(() => testOllama().then(setOwlFound))
+              }}
+            >
               Test connection
             </button>
+            {owlFound && (
+              <p role="status" className="mt-2 text-sm">
+                {owlFound}
+              </p>
+            )}
             <Notice>{owl.error}</Notice>
           </div>
           <fieldset>
@@ -197,21 +205,13 @@ export default function Settings() {
           <label className="flex items-center justify-between gap-4 text-sm">
             <span>
               Always ask before copying files
-              <span className="block text-xs text-neutral-600">Can't be turned off — the owl never moves, renames or deletes.</span>
+              <span className="block text-xs text-neutral-600">Can't be turned off — the assistant never moves, renames or deletes.</span>
             </span>
             <input type="checkbox" className="h-5 w-5 accent-neutral-950" checked disabled readOnly />
           </label>
         </Section>
 
         <Section id="library" title="Library & storage">
-          <Field label="Library folder">
-            <span className="flex gap-2">
-              <input value={libraryDraft ?? prefs.libraryFolder} onChange={(e) => setLibraryDraft(e.target.value)} className={`${input} font-mono`} />
-              <button type="button" className={`${btnSecondary} shrink-0`} onClick={() => library.run(() => moveLibrary(libraryDraft ?? prefs.libraryFolder))}>
-                Move library
-              </button>
-            </span>
-          </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Processing">
               <select value={prefs.processing} onChange={(e) => updatePrefs({ processing: e.target.value as 'auto' | 'cpu' })} className={input}>
@@ -222,12 +222,6 @@ export default function Settings() {
             <Field label="Highlights per moment">
               <input type="number" min={1} max={20} value={prefs.highlightsPerMoment} onChange={(e) => updatePrefs({ highlightsPerMoment: Math.max(1, Number(e.target.value) || 1) })} className={input} />
             </Field>
-          </div>
-          <div>
-            <button type="button" className={btnSecondary} onClick={() => library.run(clearPreviewCache)}>
-              Clear preview cache
-            </button>
-            <Notice>{library.error}</Notice>
           </div>
         </Section>
 
@@ -275,9 +269,6 @@ export default function Settings() {
         <Section id="privacy" title="Privacy" tone="panel">
           <p className="text-sm text-neutral-600">KuhaGo works fully offline. Photos, profiles and AI chats never leave this laptop.</p>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className={btnSecondary} onClick={() => privacy.run(clearOwlHistory)}>
-              Clear owl chat history
-            </button>
             {confirmDelete ? (
               <>
                 <button type="button" className={btnPrimary} onClick={remove}>
@@ -293,7 +284,6 @@ export default function Settings() {
               </button>
             )}
           </div>
-          <Notice>{privacy.error}</Notice>
           <p className="text-xs text-neutral-600">Deleting a profile removes its settings from this laptop. Your original photos are never touched.</p>
         </Section>
       </div>

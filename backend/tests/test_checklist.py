@@ -98,7 +98,7 @@ def test_new_moment_without_prompts_asks_the_owl_or_uses_its_name(client, event,
     monkeypatch.setattr(owl, "_ollama", fake)
     told = client.post(f"/events/{event}/shot_items", json={"moment": "Encore", "model": "gemma3:4b"}).json()
     assert told["prompt"] == ["a singer with a microphone", "a crowd with raised hands"]
-    assert sent["body"]["model"] == "gemma3:4b" and sent["body"]["format"] == "json"
+    assert sent["body"]["model"] == "gemma3:4b" and sent["body"]["format"]["required"] == ["prompts"]
     assert sent["timeout"] == config.OLLAMA_PROMPT_TIMEOUT
     assert "Moment: Encore" in sent["body"]["messages"][1]["content"]
 
@@ -209,7 +209,7 @@ def test_owl_suggests_moments_from_what_clip_sees(client, event, monkeypatch):
     }
     path, body = calls[-1]
     system, user = body["messages"]
-    assert path == "/api/chat" and body["model"] == "llava:7b" and body["format"] == "json"
+    assert path == "/api/chat" and body["model"] == "llava:7b" and body["format"]["required"] == ["moments"]
     assert len(user["images"]) == 2  # a model that can see gets the photos
     for fact in ["Lola 80th", "Cake, Group Photo", "- axis:0 (1)", "- axis:2 (1)"]:
         assert fact in user["content"]
@@ -249,3 +249,14 @@ def test_folder_window_helper_stays_warm(client, monkeypatch):
     res = client.post("/pick-folder")
     assert res.status_code == 503 and "Type the folder path" in res.json()["detail"]
     assert sys.executable  # the helper runs under the engine's own Python
+
+
+def test_removing_a_photo_forgets_it_but_keeps_the_original(client, event, tmp_path):
+    red = next(m for m in client.get(f"/events/{event}/media").json() if m["path"].endswith("red.jpg"))
+    assert client.get(f"/media/{red['id']}/preview").status_code == 200
+
+    assert client.delete(f"/media/{red['id']}").json() == {"removed": red["id"]}
+    assert labels(client, event) == {"green.jpg": "Group Photo"}
+    assert client.get(f"/media/{red['id']}/preview").status_code == 404
+    assert (tmp_path / "phone" / "red.jpg").exists()  # originals are never touched
+    assert client.delete(f"/media/{red['id']}").status_code == 404

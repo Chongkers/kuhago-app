@@ -136,6 +136,8 @@ export const api = {
 
   listMedia: (eventId: number, filter: { moment?: string; roll?: 'A' | 'B'; highlights?: boolean } = {}) =>
     request<Media[]>(`/events/${eventId}/media${query(filter)}`),
+  // forgets it in the event; the original file is never touched
+  deleteMedia: (mediaId: number) => request<{ removed: number }>(`/media/${mediaId}`, { method: 'DELETE' }),
   previewUrl: (mediaId: number) => `${API_BASE}/media/${mediaId}/preview`,
   // small and cached for good by the browser; version must change when the id is reused for another file
   thumbUrl: (mediaId: number, version: string) => `${API_BASE}/media/${mediaId}/thumb${query({ v: version })}`,
@@ -149,7 +151,8 @@ export const api = {
 
   owlStatus: () => request<OwlStatus>('/owl/status'),
   ask: (eventId: number, messages: ChatMessage[], model?: string) =>
-    request<{ reply: string }>(`/events/${eventId}/ask`, json('POST', { messages, model })),
+    // moments: names the user can add with a click; photos: what matches when they asked to find something
+    request<{ reply: string; moments: string[]; photos: Media[] }>(`/events/${eventId}/ask`, json('POST', { messages, model })),
   suggestMoments: (eventId: number, model?: string) =>
     request<{ moments: MomentIdea[]; saw_photos: boolean }>(`/events/${eventId}/suggest_moments`, json('POST', { model })),
 

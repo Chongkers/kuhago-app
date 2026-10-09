@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from app import config, db
 from app.routes import owl
-from ml import classifier
+from ml import classifier, search
 
 
 def e(i):
@@ -20,6 +20,8 @@ def e(i):
 @pytest.fixture(autouse=True)
 def tmp_db(monkeypatch, tmp_path):
     monkeypatch.setattr(classifier, "embed_texts", lambda texts: np.stack([e(int(t.split(":")[1])) for t in texts]))
+    monkeypatch.setattr(search, "embed_texts", lambda texts: np.stack([e(int(t.split(":")[1])) for t in texts]))
+    monkeypatch.setattr(config, "SCENE_TAGS", [])  # the real ones need the real text encoder
     monkeypatch.setattr(config, "DATA_DIR", tmp_path)
     monkeypatch.setattr(config, "DB_PATH", tmp_path / "kuha.sqlite3")
 
@@ -79,7 +81,7 @@ def test_ask_sends_event_facts_and_returns_reply(client, monkeypatch):
     monkeypatch.setattr(owl, "_ollama", fake)
     res = client.post(f"/events/{ev}/ask", json={"messages": [{"role": "user", "content": "What did we miss?"}], "model": "gemma3:4b"})
     assert res.status_code == 200
-    assert res.json() == {"reply": "No Group Photo yet."}
+    assert res.json() == {"reply": "No Group Photo yet.", "moments": [], "photos": []}
 
     body = sent["body"]
     assert sent["path"] == "/api/chat" and body["model"] == "gemma3:4b" and body["stream"] is False
@@ -88,6 +90,34 @@ def test_ask_sends_event_facts_and_returns_reply(client, monkeypatch):
     assert system["role"] == "system"
     for fact in ["Lola 80th", "birthday", "2026-10-04", "Cake: 2", "Group Photo: 0", "Unsorted: 1", "Missed moments: Group Photo"]:
         assert fact in system["content"]
+
+
+def test_ask_for_themes_returns_new_moments_to_add(client, monkeypatch):
+    ev = make_event()
+    sent = {}
+    said = {"reply": "Try these.", "moments": ["Band on Stage", "cake", " ", "band on stage"]}  # cake is on the list
+    monkeypatch.setattr(owl, "_ollama", lambda path, body=None, **_: sent.update(body=body) or {"message": {"content": json.dumps(said)}})
+    res = client.post(f"/events/{ev}/ask", json={"messages": [{"role": "user", "content": "Suggest themes for these photos"}]})
+    assert res.json() == {"reply": "Try these.", "moments": ["Band on Stage"], "photos": []}
+    assert sent["body"]["format"]["required"] == ["reply", "moments"]
+
+
+def test_ask_to_find_shows_the_photos_clip_matches(client, monkeypatch):
+    ev = make_event()
+    monkeypatch.setattr(owl, "_ollama", offline)  # the search answers on its own, with or without Ollama
+    res = client.post(f"/events/{ev}/ask", json={"messages": [{"role": "user", "content": "Find photos of axis:5"}]}).json()
+    assert "closest matches" in res["reply"] and res["moments"] == []
+    assert res["photos"][0]["path"] == "2.jpg"  # the one photo on axis 5 ranks first
+
+
+def test_ask_sends_only_the_latest_messages(client, monkeypatch):
+    ev = make_event()
+    sent = {}
+    monkeypatch.setattr(owl, "_ollama", lambda path, body=None, **_: sent.update(body=body) or {"message": {"content": "hi"}})
+    chat = [{"role": "user", "content": f"hi {i}"} for i in range(config.OWL_HISTORY_MESSAGES + 5)]
+    client.post(f"/events/{ev}/ask", json={"messages": chat})
+    assert len(sent["body"]["messages"]) == config.OWL_HISTORY_MESSAGES + 1  # plus the facts
+    assert sent["body"]["messages"][-1]["content"] == chat[-1]["content"]
 
 
 def test_ask_defaults_model(client, monkeypatch):

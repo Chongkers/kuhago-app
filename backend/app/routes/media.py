@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 from PIL import Image
 
 from app import config, db
+from app.routes.ingest import reclassify
 
 router = APIRouter()
 
@@ -47,6 +48,24 @@ def preview(media_id: int):
     if not row or not row["preview_path"] or not Path(row["preview_path"]).exists():
         raise HTTPException(404, "preview not found")
     return FileResponse(row["preview_path"], media_type="image/jpeg")
+
+
+@router.delete("/media/{media_id}")
+def remove_media(media_id: int):
+    """Take one photo or video out of its event: the row, its preview and its thumb go. The original file is
+    never touched. The rest is re-labelled, since the example-photo scale and the highlights depend on what is in
+    the event."""
+    with closing(db.connect()) as con, con:
+        row = con.execute("SELECT event_id, preview_path FROM media WHERE id = ?", (media_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "This photo is no longer in the event.")
+        con.execute("DELETE FROM media WHERE id = ?", (media_id,))
+        reclassify(con, row["event_id"])
+    if row["preview_path"]:
+        src = Path(row["preview_path"])
+        for cached in (src, src.parent.parent / "thumbs" / src.name):
+            cached.unlink(missing_ok=True)
+    return {"removed": media_id}
 
 
 @router.get("/media/{media_id}/thumb")

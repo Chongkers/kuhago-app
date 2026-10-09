@@ -143,10 +143,10 @@ function EditTools({ event, run }: { event: EventView; run: (a: () => Promise<un
             disabled={thinking || !model || event.photos + event.videos === 0}
             className={link}
           >
-            {thinking ? 'The owl is looking…' : `Ask the owl what ${noun}s these photos show`}
+            {thinking ? 'KuhaGo is looking…' : `Ask KuhaGo what ${noun}s these photos show`}
           </button>
           {model === null && (
-            <p className="mt-1 text-xs text-neutral-600">The owl is asleep: start Ollama on this laptop to get suggestions.</p>
+            <p className="mt-1 text-xs text-neutral-600">Start Ollama on this laptop to get suggestions.</p>
           )}
           {ideas && ideas.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -177,7 +177,7 @@ function EditTools({ event, run }: { event: EventView; run: (a: () => Promise<un
                 {t.label}
               </option>
             ))}
-            <option value={BLANK}>Blank</option>
+            <option value={BLANK}>{templateLabel(BLANK)}</option>
           </select>
           <button type="button" onClick={swap} className={`${btnSecondary} shrink-0 py-2`}>
             Use
@@ -193,7 +193,8 @@ function EditTools({ event, run }: { event: EventView; run: (a: () => Promise<un
 export default function CoverageCard({ event }: { event: EventView }) {
   const { mode } = event
   const pro = mode === 'pro'
-  const [editing, setEditing] = useState(false)
+  // an empty list sorts nothing, so it opens ready to be filled in
+  const [editing, setEditing] = useState(event.moments.length === 0)
   const { error, run } = useAction()
   const missed = missedMoments(event)
   const covered = event.moments.filter((m) => m.covered)
@@ -202,7 +203,7 @@ export default function CoverageCard({ event }: { event: EventView }) {
 
   const summary =
     event.moments.length === 0
-      ? `This list is empty. Edit it to add ${term('moment', mode)}s.`
+      ? `This list is empty, so nothing can be sorted yet. Click Edit list to add ${term('moment', mode)}s.`
       : missed.length === 0
         ? 'Every must-have is covered.'
         : pro
@@ -214,13 +215,15 @@ export default function CoverageCard({ event }: { event: EventView }) {
   return (
     <section className={`${card} p-5`}>
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-xl font-bold">{term('coverage', mode)}</h2>
+        <h2 className="text-xl font-bold">{term('checklistTitle', mode)}</h2>
         <button type="button" onClick={() => setEditing(!editing)} className={link}>
           {editing ? 'Done' : 'Edit list'}
         </button>
       </div>
       <p className="mt-1 text-xs text-neutral-600">
-        {editing ? `KuhaGo only suggests getting must-haves. Changing the list re-sorts your ${term('frame', mode)}s.` : summary}
+        {editing
+          ? `KuhaGo sorts your ${term('frame', mode)}s into what is listed here: a theme, a subject, anything you can see in a ${term('frame', mode)}. It only suggests getting must-haves. Changing the list re-sorts your ${term('frame', mode)}s.`
+          : summary}
       </p>
       {editing ? (
         <>

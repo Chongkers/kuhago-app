@@ -82,6 +82,10 @@ OWL_SAMPLE_PHOTOS = 4    # previews shown to a model that can see, spread over t
 OWL_TOP_TAGS = 8         # scene tags (below) handed to the model
 OWL_MAX_SUGGESTIONS = 6
 OWL_PROMPTS_PER_MOMENT = 3
+OWL_SUGGESTION_PROMPTS = 2  # captions per suggested moment; fewer than a typed moment gets, to keep the reply short
+OWL_JSON_MAX_TOKENS = 500   # cap on a JSON reply: a small model otherwise sometimes writes on for minutes
+OWL_HISTORY_MESSAGES = 12   # last messages of a chat sent to the model; older ones would crowd out the facts
+OWL_FIND_PHOTOS = 6         # photos shown under a reply when the user asks to find something
 MOMENT_NAME_MAX = 60
 # What CLIP can see in a photo, in plain words. The owl reads the most common ones in an event to work out
 # what the event really was, whether or not its model can look at photos.

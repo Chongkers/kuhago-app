@@ -17,6 +17,7 @@ export type TermKey =
   | 'clips'
   | 'selects'
   | 'coverage'
+  | 'checklistTitle'
   | 'export'
   | 'overview'
   | 'finals'
@@ -37,11 +38,13 @@ const TERMS: Record<TermKey, Record<Mode, string>> = {
   clips: { personal: 'Talking & scenery clips', pro: 'A-roll / B-roll' },
   selects: { personal: 'Favorites', pro: 'Selects' },
   coverage: { personal: 'Missed moments', pro: 'Coverage' },
+  // heading of the checklist card; 'coverage' stays the name of the check itself inside sentences
+  checklistTitle: { personal: 'Organize photos by theme, subject, etc.', pro: 'Coverage' },
   export: { personal: 'Export folders', pro: 'Archive' },
   overview: { personal: 'Overview', pro: 'Overview' },
   finals: { personal: 'Finals', pro: 'Finals' },
   settings: { personal: 'Settings', pro: 'Settings' },
-  owl: { personal: 'Ask the owl', pro: 'Ask the owl' },
+  owl: { personal: 'Ask KuhaGo', pro: 'Ask KuhaGo' },
 }
 
 export function term(key: TermKey, mode: Mode): string {

@@ -7,7 +7,7 @@ import { count, formatDate, peso, todayISO } from '../lib/format'
 import { useMode } from '../lib/mode'
 import { useProfiles } from '../lib/profile'
 import { btnPrimary, card, input, panel } from '../lib/styles'
-import { BLANK, TEMPLATES } from '../lib/templates'
+import { BLANK, TEMPLATES, templateLabel } from '../lib/templates'
 import { term, type Mode } from '../lib/terms'
 import { useAction } from '../lib/useAction'
 
@@ -36,10 +36,10 @@ function NewEventPanel({ mode, eventType, onPick }: { mode: Mode; eventType: str
       <h2 className="text-lg font-semibold">Start from a preset</h2>
       <p className="mt-1 text-sm text-neutral-600">
         A preset is only a starting list of {term('moment', mode)}s. You can add, rename and remove them any time, or
-        start blank.
+        pick Custom to write your own list: themes, subjects, anything you can see in a photo.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
-        {[...TEMPLATES, { eventType: BLANK, label: 'Blank' }].map((template) => (
+        {[...TEMPLATES, { eventType: BLANK, label: templateLabel(BLANK) }].map((template) => (
           <button
             key={template.eventType}
             type="button"

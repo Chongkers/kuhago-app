@@ -6,7 +6,7 @@ import { useSyncExternalStore } from 'react'
 import { basename, finalsView, type FinalsView, type Thumb } from '../lib/finals'
 import { useProfiles } from '../lib/profile'
 import type { Mode } from '../lib/terms'
-import { api, watchJob, type EventStatus, type ExportPlan, type KuhaEvent, type Media, type MomentIdea } from './client'
+import { api, watchJob, type ChatMessage, type EventStatus, type ExportPlan, type KuhaEvent, type Media, type MomentIdea } from './client'
 
 export type { FinalsView, MomentIdea, Thumb }
 
@@ -75,7 +75,14 @@ function fingerprint(text: string): string {
 }
 
 function thumb(m: Media): Thumb {
-  return { id: String(m.id), src: api.thumbUrl(m.id, fingerprint(`${m.event_id}|${m.path}|${m.taken_at}`)), tone: m.id }
+  const version = fingerprint(`${m.event_id}|${m.path}|${m.taken_at}`)
+  return {
+    id: String(m.id),
+    src: api.thumbUrl(m.id, version),
+    tone: m.id,
+    full: `${api.previewUrl(m.id)}?v=${version}`,
+    name: basename(m.path),
+  }
 }
 
 function roll(media: Media[], r: 'A' | 'B'): Roll {
@@ -330,6 +337,12 @@ export async function searchMedia(eventId: number | undefined, query: string): P
   return (await api.search(query, eventId)).map(thumb)
 }
 
+// Takes one photo or video out of the event. The original file stays where it is.
+export async function removeMedia(eventId: number, thumbId: string): Promise<void> {
+  await api.deleteMedia(Number(thumbId))
+  await reloadEvent(eventId)
+}
+
 export async function addExamples(eventId: number, shotItemId: number, files: File[]): Promise<void> {
   await api.addRefs(shotItemId, files)
   await reloadEvent(eventId)
@@ -354,17 +367,23 @@ export async function scanFinals(eventId: number, folder: string): Promise<void>
   await loadFinals(eventId, folder)
 }
 
-// Settings actions that need the engine.
-export const askOwl = (_eventId: number | undefined, _prompt: string) => notConnected()
-export const testOllama = (_url: string) => notConnected()
-export const moveLibrary = (_folder: string) => notConnected()
-export const clearPreviewCache = () => notConnected()
-export const clearOwlHistory = () => notConnected()
+export type OwlReply = { reply: string; moments: string[]; photos: Thumb[] }
 
-export const NOT_CONNECTED = "KuhaGo's engine can't do this yet."
+// One answer about an event from Ollama on this laptop. messages is the whole conversation so far.
+export async function askOwl(eventId: number | undefined, messages: ChatMessage[], preferred: string): Promise<OwlReply> {
+  if (eventId === undefined) throw new Error('Create an event first, then ask about it.')
+  // no installed model: the engine's default is asked for, and its reply says how to get it
+  const model = (await owlModel(preferred)) ?? undefined
+  const { reply, moments, photos } = await api.ask(eventId, messages, model)
+  return { reply, moments, photos: photos.map(thumb) }
+}
 
-function notConnected(): Promise<never> {
-  return Promise.reject(new Error(NOT_CONNECTED))
+// Resolves with a sentence saying what Ollama has; rejects with one saying what's missing.
+export async function testOllama(): Promise<string> {
+  const status = await api.owlStatus()
+  if (!status.connected) throw new Error("Ollama isn't running on this laptop. Open the Ollama app, then test again.")
+  if (status.models.length === 0) throw new Error(`Ollama is running but has no models yet. Run: ollama pull ${status.default_model}`)
+  return `Connected to Ollama. Models on this laptop: ${status.models.join(', ')}.`
 }
 
 export const loadExportPlan = (eventId: number): Promise<ExportPlan> => api.exportPlan(eventId)

@@ -19,6 +19,9 @@ __pycache__/
 *.safetensors
 models/
 
+# Kuha.exe build (build.ps1): PyInstaller work folder; the result is in dist/
+/build/
+
 # Node / Vite
 node_modules/
 dist/

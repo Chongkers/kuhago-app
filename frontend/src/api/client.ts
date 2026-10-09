@@ -3,8 +3,10 @@
 
 import type { Mode } from '../lib/terms'
 
-// 127.0.0.1, not localhost: another server on [::]:8000 can catch `localhost` first
-export const API_BASE = 'http://127.0.0.1:8000'
+// A built UI is served by the engine itself, so the API is at the same address under /api.
+// Under the Vite dev server it is the engine on :8000 (127.0.0.1, not localhost: another server on [::]:8000
+// can catch `localhost` first).
+export const API_BASE = import.meta.env.DEV ? 'http://127.0.0.1:8000/api' : '/api'
 
 export type EventStatus = 'inquiry' | 'booked' | 'shot' | 'editing' | 'delivered'
 export type SidecarMode = 'lightroom' | 'darktable'

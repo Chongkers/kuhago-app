@@ -77,7 +77,7 @@ else {
 Write-Host 'Waiting for the engine...' -NoNewline
 $ready = $false
 foreach ($i in 1..90) {
-    try { Invoke-WebRequest 'http://127.0.0.1:8000/events' -UseBasicParsing -TimeoutSec 2 | Out-Null; $ready = $true; break }
+    try { Invoke-WebRequest 'http://127.0.0.1:8000/api/events' -UseBasicParsing -TimeoutSec 2 | Out-Null; $ready = $true; break }
     catch { Write-Host '.' -NoNewline; Start-Sleep -Seconds 2 }
 }
 Write-Host ''

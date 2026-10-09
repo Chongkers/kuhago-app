@@ -30,7 +30,7 @@ def tmp_db(monkeypatch, tmp_path):
 def client():
     from app.main import app
 
-    return TestClient(app)  # no `with`: lifespan (CLIP load) never runs
+    return TestClient(app, base_url="http://testserver/api")  # no `with`: lifespan (CLIP load) never runs
 
 
 def make_event():

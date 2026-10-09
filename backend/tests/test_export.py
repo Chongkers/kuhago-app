@@ -93,7 +93,7 @@ def _sse(client, job_id):
 def test_dry_run_then_copy(tmp_path):
     from app.main import app
 
-    client = TestClient(app)  # no `with`: lifespan (CLIP load) never runs
+    client = TestClient(app, base_url="http://testserver/api")  # no `with`: lifespan (CLIP load) never runs
     src, out = tmp_path / "src", tmp_path / "out"
     ev = _personal_event(src)
     root = out / "2026-10-09_Lola's 80th - Party"
@@ -125,7 +125,7 @@ def test_dry_run_then_copy(tmp_path):
 def test_export_rejects_bad_input(tmp_path):
     from app.main import app
 
-    client = TestClient(app)
+    client = TestClient(app, base_url="http://testserver/api")
     assert client.post("/events/999/export", json={"dest": str(tmp_path), "dry_run": True}).status_code == 404
     ev = _personal_event(tmp_path / "src")
     assert client.post(f"/events/{ev}/export", json={"dest": "relative/dir", "dry_run": False}).status_code == 400

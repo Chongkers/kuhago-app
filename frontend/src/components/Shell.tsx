@@ -5,7 +5,7 @@ import { useMode } from '../lib/mode'
 import { useProfiles } from '../lib/profile'
 import { backLink } from '../lib/styles'
 import { term, type Mode } from '../lib/terms'
-import { Avatar, ModeToggle, Owl } from './ui'
+import { Avatar, ModeToggle, Owl, ThemeToggle } from './ui'
 
 type IconName = 'grid' | 'list' | 'search' | 'folder' | 'check' | 'gear' | 'owl'
 
@@ -43,22 +43,27 @@ function useCurrentEvent(events: EventView[]): EventView | undefined {
 type NavItem = { to: string; label: string; icon: IconName; end?: boolean; badge?: ReactNode }
 
 function navItems(mode: Mode, events: EventView[], current: EventView | undefined, unedited: number): NavItem[] {
-  const at = (suffix = '') => (current ? `/events/${current.id}${suffix}` : '/')
+  // with no event yet, the links into one are left out: they would all point at the list and light up together
+  return allNavItems(mode, events, current, unedited).filter((item) => current || !item.to.startsWith('/events/'))
+}
+
+function allNavItems(mode: Mode, events: EventView[], current: EventView | undefined, unedited: number): NavItem[] {
+  const at = (suffix = '') => `/events/${current?.id}${suffix}`
   if (mode === 'pro') {
     return [
-      { to: '/', label: 'Gigs', icon: 'grid', end: true, badge: events.length },
+      { to: '/', label: term('events', mode), icon: 'grid', end: true, badge: events.length },
       { to: at(), label: 'Shot list', icon: 'list', end: true },
       { to: at('/finals'), label: 'Selects vs finals', icon: 'check', badge: unedited > 0 ? unedited : undefined },
-      { to: at('/export'), label: 'Archive', icon: 'folder' },
+      { to: at('/export'), label: term('export', mode), icon: 'folder' },
       { to: '/owl', label: term('owl', mode), icon: 'owl', badge: 'AI' },
       { to: '/settings', label: 'Settings', icon: 'gear' },
     ]
   }
   return [
-    { to: '/', label: 'Events', icon: 'grid', end: true, badge: events.length },
+    { to: '/', label: term('events', mode), icon: 'grid', end: true, badge: events.length },
     { to: at(), label: 'Moments', icon: 'list', end: true },
     { to: '/search', label: 'Search', icon: 'search' },
-    { to: at('/export'), label: 'Export folders', icon: 'folder' },
+    { to: at('/export'), label: term('export', mode), icon: 'folder' },
     { to: '/owl', label: term('owl', mode), icon: 'owl', badge: 'AI' },
     { to: '/settings', label: 'Settings', icon: 'gear' },
   ]
@@ -102,10 +107,13 @@ function Sidebar({ mode }: { mode: Mode }) {
 
   return (
     <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-4 overflow-y-auto border-r border-neutral-200 bg-neutral-100 p-3 lg:flex">
-      <Link to="/" className="flex items-center gap-2.5 px-2 pt-2">
-        <Owl />
-        <span className="font-display text-xl font-bold tracking-tight">KuhaGo</span>
-      </Link>
+      <div className="flex items-center justify-between gap-2 px-2 pt-2">
+        <Link to="/" className="flex items-center gap-2.5">
+          <Owl className="h-8 w-8" />
+          <span className="font-display text-xl font-bold tracking-tight">KuhaGo</span>
+        </Link>
+        <ThemeToggle />
+      </div>
       <ModeToggle />
       <nav aria-label="Main" className="space-y-1">
         {items.map((item) => (
@@ -170,7 +178,10 @@ function MobileNav({ mode }: { mode: Mode }) {
           <Owl className="h-6 w-6" />
           <span className="font-display text-lg font-bold">KuhaGo</span>
         </Link>
-        <ModeToggle />
+        <div className="flex items-center gap-2">
+          <ModeToggle />
+          <ThemeToggle />
+        </div>
       </div>
       <nav aria-label="Main" className="-mx-1 mt-3 flex gap-1 overflow-x-auto">
         {items.map((item) => (
@@ -231,7 +242,10 @@ export function BarePage({ right, width = 'max-w-4xl', children }: { right?: Rea
           <Owl />
           <span className="font-display text-xl font-bold tracking-tight">KuhaGo</span>
         </Link>
-        <div className="flex items-center gap-4 text-sm text-neutral-600">{right}</div>
+        <div className="flex items-center gap-4 text-sm text-neutral-600">
+          {right}
+          <ThemeToggle />
+        </div>
       </header>
       <main className={`mx-auto w-full flex-1 px-4 py-10 sm:px-8 ${width}`}>{children}</main>
     </div>

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   addExamples,
@@ -9,12 +10,14 @@ import {
   type EventView,
   type SidecarMode,
 } from '../api/data'
-import { formatDate, peso } from '../lib/format'
+import { count, formatDate, peso } from '../lib/format'
+import { useMode } from '../lib/mode'
 import { backLink, btnPrimary, btnSecondary, card, panel } from '../lib/styles'
 import { templateLabel } from '../lib/templates'
 import { rollLabel, term } from '../lib/terms'
 import { useAction } from '../lib/useAction'
 import CoverageCard from './CoverageCard'
+import { EditEventModal } from './EventForm'
 import OrganizeCard from './OrganizeCard'
 import OwlCard from './OwlChat'
 import { Badge, ImagePicker, Notice, Thumb } from './ui'
@@ -103,6 +106,8 @@ function XmpPanel({ event }: { event: EventView }) {
 
 export default function ProGig({ event }: { event: EventView }) {
   const refs = useAction()
+  const { setMode } = useMode()
+  const [editing, setEditing] = useState(false)
   const facts = [
     { label: 'Client', value: event.client || '—' },
     { label: 'Date', value: formatDate(event.date, event.endDate) },
@@ -116,7 +121,7 @@ export default function ProGig({ event }: { event: EventView }) {
       center={
         <p className="text-sm text-neutral-600">
           <Link to="/" className="hover:text-neutral-950">
-            Gigs
+            {term('eventsTitle', event.mode)}
           </Link>{' '}
           / {event.name}
         </p>
@@ -135,7 +140,13 @@ export default function ProGig({ event }: { event: EventView }) {
       <Link to="/" className={backLink}>
         ← {term('eventsTitle', event.mode)}
       </Link>
-      <h1 className="mt-1 text-3xl font-bold tracking-tight">{event.name}</h1>
+      <div className="mt-1 flex flex-wrap items-baseline gap-x-3">
+        <h1 className="text-3xl font-bold tracking-tight">{event.name}</h1>
+        <button type="button" onClick={() => setEditing(true)} className="text-sm font-medium underline">
+          Edit details
+        </button>
+      </div>
+      {editing && <EditEventModal event={event} onClose={() => setEditing(false)} />}
 
       <dl className={`${card} mt-5 grid grid-cols-2 divide-neutral-200 shadow-none sm:grid-cols-5 sm:divide-x`}>
         {facts.map((fact) => (
@@ -151,6 +162,17 @@ export default function ProGig({ event }: { event: EventView }) {
       </dl>
 
       <StagePills event={event} />
+
+      {/* the gig's photos live in the Events window, at the same address */}
+      <div className={`${panel} mt-5 flex flex-wrap items-center justify-between gap-3 px-4 py-3`}>
+        <p className="text-sm">
+          <span className="font-display font-semibold">Linked event:</span> {event.name} ·{' '}
+          {count(event.photos, 'photo')} · {count(event.videos, 'video')}
+        </p>
+        <button type="button" onClick={() => setMode('personal')} className={btnSecondary}>
+          View photos in {term('window', 'personal')}
+        </button>
+      </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="space-y-8">

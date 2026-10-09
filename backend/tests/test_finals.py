@@ -36,7 +36,7 @@ def test_scan_finals_folder(tmp_path, monkeypatch):
     # the editor's sidecars say: both rated 4 stars
     monkeypatch.setattr(finals, "read_ratings", lambda srcs: {s: 4 for s in srcs})
 
-    client = TestClient(app)
+    client = TestClient(app, base_url="http://testserver/api")
     ev = _event()
     _ingest(client, ev, [raws])
     media = {m["path"][-7:]: m["id"] for m in client.get(f"/events/{ev}/media").json()}

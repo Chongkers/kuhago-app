@@ -98,10 +98,10 @@ function RecoveryCode() {
 
 const SECTIONS = [
   { id: 'profile', label: 'Profile' },
-  { id: 'mode', label: 'Mode' },
+  { id: 'mode', label: 'Window' },
   { id: 'owl', label: 'Ask KuhaGo' },
   { id: 'library', label: 'Library & storage' },
-  { id: 'pro', label: 'Pro workflow', pro: true },
+  { id: 'pro', label: 'Tracker workflow', pro: true },
   { id: 'appearance', label: 'Appearance' },
   { id: 'privacy', label: 'Privacy' },
 ]
@@ -139,7 +139,7 @@ export default function Settings() {
                 <input value={active.name} onChange={(e) => update({ name: e.target.value })} className={input} />
               </Field>
               {pro && (
-                <Field label="Studio name (Pro)">
+                <Field label="Studio name">
                   <input value={prefs.studio} onChange={(e) => updatePrefs({ studio: e.target.value })} placeholder="Your studio" className={input} />
                 </Field>
               )}
@@ -157,9 +157,9 @@ export default function Settings() {
           </div>
         </Section>
 
-        <Section id="mode" title="Mode">
+        <Section id="mode" title="Window">
           <ModeToggle />
-          <p className="text-xs text-neutral-600">New events open in this mode. Each event can still be switched on its own page.</p>
+          <p className="text-xs text-neutral-600">Events is where photos are organized. Tracker adds clients, fees, shot lists and editor tools for gigs; a gig's photos still show up in Events.</p>
         </Section>
 
         <Section id="owl" title="Ask KuhaGo">
@@ -226,7 +226,7 @@ export default function Settings() {
         </Section>
 
         {pro && (
-          <Section id="pro" title="Pro workflow" badge="PRO">
+          <Section id="pro" title="Tracker workflow" badge="TRACKER">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Sidecar mode">
                 <select value={sidecarMode} onChange={(e) => setSidecarMode(e.target.value as typeof sidecarMode)} className={input}>

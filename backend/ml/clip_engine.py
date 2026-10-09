@@ -23,8 +23,10 @@ class _Clip:
         import open_clip
 
         self.device = config.pick_device()
+        # Kuha.exe ships the weights file, so there is no Hugging Face cache to look in
+        bundled = config.CLIP_WEIGHTS.exists()
         model, _, self.preprocess = open_clip.create_model_and_transforms(
-            config.CLIP_MODEL, pretrained=config.CLIP_PRETRAINED, device=self.device
+            config.CLIP_MODEL, pretrained=str(config.CLIP_WEIGHTS) if bundled else config.CLIP_PRETRAINED, device=self.device
         )
         self.model = model.eval()
         self.tokenize = open_clip.get_tokenizer(config.CLIP_MODEL)

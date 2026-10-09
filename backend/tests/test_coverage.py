@@ -70,7 +70,7 @@ def test_coverage_route_reads_db_and_embeddings():
 
     from app.main import app
 
-    client = TestClient(app)  # no `with`: lifespan (CLIP load) never runs
+    client = TestClient(app, base_url="http://testserver/api")  # no `with`: lifespan (CLIP load) never runs
     res = client.get(f"/events/{ev}/coverage")
     assert res.status_code == 200
     assert res.json() == [

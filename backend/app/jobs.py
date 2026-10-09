@@ -34,6 +34,11 @@ def start(fn, *args) -> str:
     return job_id
 
 
+def running() -> int:
+    """Jobs that have not reported `done` yet. Kuha.exe asks before quitting while there are any."""
+    return sum(1 for events in list(_jobs.values()) if not events or events[-1]["stage"] != "done")
+
+
 @router.get("/jobs/{job_id}/events")
 async def job_events(job_id: str):
     events = _jobs.get(job_id)

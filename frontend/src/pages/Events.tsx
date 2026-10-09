@@ -1,92 +1,13 @@
-import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { createEvent, missedMoments, STATUSES, useEvents, type EventView } from '../api/data'
-import { Badge, ModeToggle, Notice, Thumb } from '../components/ui'
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { missedMoments, STATUSES, useEvents, type EventView } from '../api/data'
+import { NewEventModal } from '../components/EventForm'
+import { Badge, Thumb } from '../components/ui'
 import { Page } from '../components/Shell'
-import { count, formatDate, peso, todayISO } from '../lib/format'
+import { count, formatDate, peso } from '../lib/format'
 import { useMode } from '../lib/mode'
-import { useProfiles } from '../lib/profile'
-import { btnPrimary, card, input, panel } from '../lib/styles'
-import { BLANK, TEMPLATES, templateLabel } from '../lib/templates'
-import { term, type Mode } from '../lib/terms'
-import { useAction } from '../lib/useAction'
-
-function NewEventPanel({ mode, eventType, onPick }: { mode: Mode; eventType: string | null; onPick: (t: string) => void }) {
-  const navigate = useNavigate()
-  const [name, setName] = useState('')
-  const [client, setClient] = useState('')
-  const [date, setDate] = useState(todayISO)
-  const { error, run } = useAction()
-  const { claimEvent } = useProfiles()
-  const pro = mode === 'pro'
-
-  function submit(e: FormEvent) {
-    e.preventDefault()
-    if (!eventType || !name.trim()) return
-    const input = { mode, name: name.trim(), eventType, date, ...(pro ? { client: client.trim() } : {}) }
-    run(async () => {
-      const id = await createEvent(input)
-      claimEvent(id)
-      navigate(`/events/${id}`)
-    })
-  }
-
-  return (
-    <section className={`${panel} mt-7 p-6`}>
-      <h2 className="text-lg font-semibold">Start from a preset</h2>
-      <p className="mt-1 text-sm text-neutral-600">
-        A preset is only a starting list of {term('moment', mode)}s. You can add, rename and remove them any time, or
-        pick Custom to write your own list: themes, subjects, anything you can see in a photo.
-      </p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {[...TEMPLATES, { eventType: BLANK, label: templateLabel(BLANK) }].map((template) => (
-          <button
-            key={template.eventType}
-            type="button"
-            aria-pressed={eventType === template.eventType}
-            onClick={() => onPick(template.eventType)}
-            className={`rounded-full border px-4 py-2 font-display font-medium ${
-              eventType === template.eventType
-                ? 'border-neutral-950 bg-neutral-950 text-white'
-                : 'border-neutral-400 bg-white hover:border-neutral-950'
-            }`}
-          >
-            {template.label}
-          </button>
-        ))}
-      </div>
-      {eventType && (
-        <form onSubmit={submit} className="mt-4 flex flex-wrap items-end gap-3">
-          <label className="min-w-56 flex-1 text-sm font-medium">
-            {term('event', mode)} name
-            <input
-              autoFocus
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={pro ? "Bea's Debut" : "Lola's 80th Birthday"}
-              className={`${input} mt-1`}
-            />
-          </label>
-          {pro && (
-            <label className="min-w-44 flex-1 text-sm font-medium">
-              Client
-              <input value={client} onChange={(e) => setClient(e.target.value)} className={`${input} mt-1`} />
-            </label>
-          )}
-          <label className="text-sm font-medium">
-            Date
-            <input type="date" required value={date} onChange={(e) => setDate(e.target.value)} className={`${input} mt-1`} />
-          </label>
-          <button type="submit" className={btnPrimary}>
-            Create
-          </button>
-        </form>
-      )}
-      <Notice>{error}</Notice>
-    </section>
-  )
-}
+import { btnPrimary, card, panel } from '../lib/styles'
+import { term } from '../lib/terms'
 
 function EventCard({ event }: { event: EventView }) {
   const missed = missedMoments(event).length
@@ -101,11 +22,12 @@ function EventCard({ event }: { event: EventView }) {
       </div>
       <div className="p-4">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-lg font-semibold">{event.name}</h3>
+          <h3 className="min-w-0 truncate text-lg font-semibold">{event.name}</h3>
           {missed > 0 ? <Badge variant="outline">{missed} suggested</Badge> : <Badge variant="outline">All covered</Badge>}
         </div>
         <p className="mt-1 text-sm text-neutral-600">
           {formatDate(event.date, event.endDate)} · {count(event.photos, 'photo')} · {count(event.videos, 'video')}
+          {event.mode === 'pro' && ` · in ${term('window', 'pro')}`}
         </p>
       </div>
     </Link>
@@ -167,8 +89,6 @@ export default function Events() {
   const mode = storedMode ?? 'personal'
   const pro = mode === 'pro'
   const events = useEvents(mode)
-  const [eventType, setEventType] = useState<string | null>(null)
-  // Personal always offers templates; Pro shows them once "New gig" is pressed.
   const [creating, setCreating] = useState(false)
 
   const photos = events.reduce((sum, e) => sum + e.photos, 0)
@@ -180,31 +100,32 @@ export default function Events() {
     : `${count(events.length, 'event')} · ${count(photos, 'photo')} · ${count(videos, 'video')}`
 
   return (
-    <Page
-      pro={pro}
-      width="max-w-7xl"
-      right={<ModeToggle />}
-    >
+    <Page pro={pro} width="max-w-7xl">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-4xl font-bold tracking-tight">{term('eventsTitle', mode)}</h1>
           <p className="mt-1 text-neutral-600">{subtitle}</p>
         </div>
-        <button
-          type="button"
-          className={`${btnPrimary} text-base`}
-          onClick={() => {
-            setCreating(true)
-            setEventType((current) => current ?? TEMPLATES[0].eventType)
-          }}
-        >
+        <button type="button" className={`${btnPrimary} text-base`} onClick={() => setCreating(true)}>
           <span aria-hidden="true">+</span> {term('newEvent', mode)}
         </button>
       </div>
 
-      {(!pro || creating) && <NewEventPanel key={mode} mode={mode} eventType={eventType} onPick={setEventType} />}
+      {creating && <NewEventModal mode={mode} onClose={() => setCreating(false)} />}
 
-      {pro ? (
+      {events.length === 0 ? (
+        <section className={`${panel} mt-7 p-8 text-center`}>
+          <h2 className="text-xl font-bold">{pro ? 'No gigs yet' : 'No events yet'}</h2>
+          <p className="mx-auto mt-1 max-w-md text-sm text-neutral-600">
+            {pro
+              ? 'A gig keeps the client, the fee and the shot list. Its photos show up in Events.'
+              : 'Make an event, point KuhaGo at a folder of photos and videos, and it sorts them into moments.'}
+          </p>
+          <button type="button" className={`${btnPrimary} mt-4`} onClick={() => setCreating(true)}>
+            <span aria-hidden="true">+</span> {term('newEvent', mode)}
+          </button>
+        </section>
+      ) : pro ? (
         <GigsTable gigs={events} />
       ) : (
         <div className="mt-9 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">

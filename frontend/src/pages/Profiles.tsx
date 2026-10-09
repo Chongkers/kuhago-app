@@ -2,7 +2,7 @@ import { useState, type FormEvent, type ReactNode } from 'react'
 import { Avatar, Owl } from '../components/ui'
 import { useProfiles } from '../lib/profile'
 import { btnPrimary, input } from '../lib/styles'
-import type { Mode } from '../lib/terms'
+import { term, type Mode } from '../lib/terms'
 
 // Split layout shared by log in and create profile: dark brand panel, form on the right.
 function Split({ headline, aside, footer, children }: { headline: ReactNode; aside?: ReactNode; footer: ReactNode; children: ReactNode }) {
@@ -122,7 +122,7 @@ function LogIn({ onCreate }: { onCreate: () => void }) {
             <Avatar name={p.name} className="h-14 w-14 text-xl" />
             <span className="mt-2 font-display font-semibold">{p.name}</span>
             <span className="text-sm text-neutral-600">
-              {p.mode === 'pro' ? 'Pro' : 'Personal'}
+              {term('window', p.mode)}
               {p.pin ? ' · PIN' : ''}
             </span>
           </button>
@@ -187,11 +187,11 @@ function LogIn({ onCreate }: { onCreate: () => void }) {
   )
 }
 
-const STEPS = ['Your name and an optional PIN', 'Personal or Pro', 'Where your library lives']
+const STEPS = ['Your name and an optional PIN', 'Events or Tracker', 'Where your library lives']
 
 const MODE_CHOICES: { mode: Mode; title: string; body: string }[] = [
-  { mode: 'personal', title: "I'm organizing my own photos", body: 'Personal · birthdays, Noche Buena, trips' },
-  { mode: 'pro', title: 'I shoot for clients', body: 'Pro · gigs, RAW, A-roll / B-roll, XMP' },
+  { mode: 'personal', title: "I'm organizing my own photos", body: 'Events · birthdays, Noche Buena, trips' },
+  { mode: 'pro', title: 'I shoot for clients', body: 'Tracker · gigs, RAW, A-roll / B-roll, XMP' },
 ]
 
 function CreateProfile({ onBack, canGoBack }: { onBack: () => void; canGoBack: boolean }) {

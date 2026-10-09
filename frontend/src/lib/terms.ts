@@ -4,6 +4,7 @@
 export type Mode = 'personal' | 'pro'
 
 export type TermKey =
+  | 'window'
   | 'event'
   | 'events'
   | 'eventsTitle'
@@ -25,9 +26,11 @@ export type TermKey =
   | 'owl'
 
 const TERMS: Record<TermKey, Record<Mode, string>> = {
+  // what the user calls each mode: the two windows of the app
+  window: { personal: 'Events', pro: 'Tracker' },
   event: { personal: 'Event', pro: 'Gig' },
   events: { personal: 'Events', pro: 'Gigs' },
-  eventsTitle: { personal: 'Your events', pro: 'Gigs' },
+  eventsTitle: { personal: 'Your events', pro: 'Tracker' },
   newEvent: { personal: 'New event', pro: 'New gig' },
   moment: { personal: 'moment', pro: 'shot' },
   frame: { personal: 'photo', pro: 'frame' },

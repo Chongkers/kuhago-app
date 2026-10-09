@@ -22,7 +22,7 @@ def test_examples_relabel_the_event(tmp_path, monkeypatch):
     folder.mkdir()
     Image.new("RGB", (8, 8), (0, 255, 0)).save(folder / "green.jpg")  # text alone says "Group Photo"
     Image.new("RGB", (8, 8), (255, 0, 0)).save(folder / "red.jpg")
-    client = TestClient(app)
+    client = TestClient(app, base_url="http://testserver/api")
     ev = _event()
     _ingest(client, ev, [folder])
 

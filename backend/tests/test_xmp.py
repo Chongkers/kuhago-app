@@ -87,7 +87,7 @@ def test_route_builds_keywords_per_media(tmp_path, monkeypatch):
                 "INSERT INTO media(event_id, path, kind, moment, roll) VALUES (?, ?, ?, ?, ?)",
                 (ev, str(tmp_path / path), kind, moment, roll),
             )
-    client = TestClient(app)
+    client = TestClient(app, base_url="http://testserver/api")
     assert client.post(f"/events/{ev}/xmp", json={"mode": "lightroom"}).json() == {"written": 2}
     assert seen == {
         "mode": "lightroom",

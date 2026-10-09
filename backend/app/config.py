@@ -1,11 +1,36 @@
 """All tunable numbers and paths live here (AGENTS.md §10.10). No magic numbers in ML code."""
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 REPO_DIR = BACKEND_DIR.parent
-DATA_DIR = REPO_DIR / "data"
+
+# Kuha.exe (PyInstaller, see build.ps1): the files it ships with are read-only and sit beside the exe, and whatever
+# the user creates goes under %LOCALAPPDATA%\Kuha. A dev checkout keeps everything in the repo, as before.
+FROZEN = getattr(sys, "frozen", False)
+RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", BACKEND_DIR))  # templates, the built UI
+APP_DIR = Path(sys.executable).parent if FROZEN else REPO_DIR  # models/ and tools/ in a build
+USER_DIR = Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "Kuha"
+DATA_DIR = Path(os.environ.get("KUHA_DATA_DIR") or (USER_DIR / "data" if FROZEN else REPO_DIR / "data"))
 DB_PATH = DATA_DIR / "kuha.sqlite3"
-TEMPLATES_DIR = BACKEND_DIR / "templates"
+LOG_PATH = USER_DIR / "logs" / "kuha.log"  # Kuha.exe has no console; this is where its output goes
+WEBVIEW_DIR = USER_DIR / "webview"  # Kuha.exe's window keeps its browser storage here: chats, the profile
+TEMPLATES_DIR = RESOURCE_DIR / "templates"
+UI_DIR = RESOURCE_DIR / "ui" if FROZEN else REPO_DIR / "frontend" / "dist"  # `vite build`; served when it exists
+TOOLS_DIR = APP_DIR / "tools"
+CLIP_WEIGHTS = APP_DIR / "models" / "open_clip_model.safetensors"  # shipped in a build; else the Hugging Face cache
+
+APP_HOST = "127.0.0.1"
+APP_PORT = 8765  # Kuha.exe only. Fixed: the browser keeps chats and settings per address, port included
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)  # creationflags: a helper program never flashes a console
+
+
+def tool(name: str) -> str:
+    """FFmpeg, ffprobe or ExifTool: the copy shipped beside Kuha.exe if there is one, else whatever is on PATH."""
+    bundled = TOOLS_DIR / f"{name}.exe"
+    return str(bundled) if bundled.exists() else name
 
 
 def event_dir(event_id: int) -> Path:

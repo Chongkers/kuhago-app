@@ -58,7 +58,7 @@ It works for everyone:
 ## How it works
 
 ```
-React UI (localhost:5173)  ──REST/SSE──►  FastAPI backend (localhost:8000)
+React UI (localhost:5173)  ──REST/SSE──►  FastAPI backend (localhost:8000/api)
                                             ├─ Previews: Pillow + pillow-heif (phone) / rawpy (RAW)
                                             ├─ Video: FFmpeg frames + Silero VAD
                                             ├─ Embeddings: OpenCLIP ViT-B-32

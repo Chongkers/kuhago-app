@@ -91,7 +91,7 @@ def test_ingest_videos_get_a_roll_and_bad_ones_are_skipped(tmp_path, monkeypatch
         (folder / name).write_bytes(b"x")
     Image.new("RGB", (8, 8), (255, 0, 0)).save(folder / "cake.jpg")
 
-    client = TestClient(app)
+    client = TestClient(app, base_url="http://testserver/api")
     ev = _event()
     progress = _ingest(client, ev, [folder])
     assert progress[-1]["stage"] == "done" and not [p for p in progress if p["stage"] == "error"]

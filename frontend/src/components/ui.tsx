@@ -1,30 +1,71 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Thumb as ThumbData } from '../api/data'
+import logo from '../assets/logo.png'
 import { useMode } from '../lib/mode'
-import { initials } from '../lib/profile'
-import type { Mode } from '../lib/terms'
+import { initials, isDark, useProfiles } from '../lib/profile'
+import { term, type Mode } from '../lib/terms'
 
+// The logo. It is a picture with its own greys, so it looks the same in both themes.
 export function Owl({ className = 'h-7 w-7' }: { className?: string }) {
+  return <img src={logo} alt="" aria-hidden="true" className={`shrink-0 ${className}`} />
+}
+
+// One click between light and dark. "Match system" is still in Settings; this picks one for good.
+export function ThemeToggle() {
+  const { active, updatePrefs } = useProfiles()
+  if (!active) return null
+  const dark = isDark(active.prefs.theme)
+  const label = dark ? 'Switch to light mode' : 'Switch to dark mode'
   return (
-    <svg viewBox="0 0 48 48" className={className} aria-hidden="true">
-      <path d="M6 3l10 7h16l10-7v27c0 9-8 15-18 15S6 39 6 30z" fill="currentColor" />
-      <circle cx="16.5" cy="22" r="7" fill="#fff" />
-      <circle cx="31.5" cy="22" r="7" fill="#fff" />
-      <circle cx="17.5" cy="22" r="3.6" fill="currentColor" />
-      <circle cx="30.5" cy="22" r="3.6" fill="currentColor" />
-      <circle cx="18.8" cy="20.6" r="1.1" fill="#fff" />
-      <circle cx="31.8" cy="20.6" r="1.1" fill="#fff" />
-      <path d="M21.5 29.5l2.5 4.5 2.5-4.5z" fill="#fff" />
-      <path
-        d="M17 37.5l2.5 2.5 2.5-2.5m4 0l2.5 2.5 2.5-2.5"
-        fill="none"
-        stroke="#fff"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={() => updatePrefs({ theme: dark ? 'light' : 'dark' })}
+      className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-neutral-400 hover:border-neutral-950"
+    >
+      <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {dark ? (
+          <path d="M12 8a4 4 0 100 8 4 4 0 000-8zM12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4" />
+        ) : (
+          <path d="M20 14.5A8.5 8.5 0 019.5 4a8.5 8.5 0 1010.5 10.5z" />
+        )}
+      </svg>
+    </button>
+  )
+}
+
+// A window over the page for one short task. Esc, the X and a click outside all close it.
+// The backdrop colour is literal: black is flipped to white in the dark theme.
+export function Modal({ title, wide = false, onClose, children }: { title: string; wide?: boolean; onClose: () => void; children: ReactNode }) {
+  const ref = useRef<HTMLDialogElement>(null)
+  useEffect(() => {
+    const dialog = ref.current
+    dialog?.showModal()
+    return () => dialog?.close()
+  }, [])
+  return (
+    <dialog
+      ref={ref}
+      aria-label={title}
+      onCancel={(e) => {
+        e.preventDefault()
+        onClose()
+      }}
+      onMouseDown={(e) => e.target === ref.current && onClose()}
+      className={`m-auto max-h-[calc(100vh-2rem)] ${wide ? 'w-[min(64rem,calc(100vw-2rem))]' : 'w-[min(38rem,calc(100vw-2rem))]'} max-w-none overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-0 text-neutral-950 shadow-xl backdrop:bg-[#0a0a0a]/60`}
+    >
+      <div className="p-6">
+        <div className="flex items-start justify-between gap-4">
+          <h2 className="text-2xl font-bold tracking-tight">{title}</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="-mr-2 -mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-full text-xl text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950">
+            ×
+          </button>
+        </div>
+        {children}
+      </div>
+    </dialog>
   )
 }
 
@@ -96,12 +137,12 @@ export function ModeToggle() {
   const { mode, setMode } = useMode()
   const navigate = useNavigate()
   const options: { mode: Mode; label: string }[] = [
-    { mode: 'personal', label: 'Personal' },
-    { mode: 'pro', label: 'Pro' },
+    { mode: 'personal', label: term('window', 'personal') },
+    { mode: 'pro', label: term('window', 'pro') },
   ]
 
   return (
-    <div className="flex rounded-full border border-neutral-400 bg-neutral-100 p-1" role="group" aria-label="Mode">
+    <div className="flex rounded-full border border-neutral-400 bg-neutral-100 p-1" role="group" aria-label="Window">
       {options.map((option) => (
         <button
           key={option.mode}

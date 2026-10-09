@@ -22,6 +22,7 @@ export type MomentView = {
   covered: boolean
   bestScore?: number
   hint?: string
+  // every photo and video sorted into it; pages show the first few and open the rest on request
   thumbs: Thumb[]
   refs: Thumb[]
 }
@@ -59,7 +60,6 @@ export type EventView = {
 export const STATUSES: EventStatus[] = ['inquiry', 'booked', 'shot', 'editing', 'delivered']
 
 const UNSORTED = 'Unsorted'
-const THUMBS_PER_MOMENT = 6
 
 // Missed = a must-have with nothing found. Optional moments are never reported as missed.
 export function missedMoments(event: EventView): MomentView[] {
@@ -113,7 +113,7 @@ async function loadEvent(e: KuhaEvent): Promise<EventView> {
       bestScore: cov?.best_score,
       // the raw score is jargon, so only Pro sees it
       hint: pro && cov && !cov.covered && media.length > 0 ? `Closest match: ${cov.best_score.toFixed(2)}` : undefined,
-      thumbs: found.slice(0, THUMBS_PER_MOMENT).map(thumb),
+      thumbs: found.map(thumb),
       refs: item.refs.map((id) => ({ id: `ref-${id}`, src: api.refImageUrl(id), tone: id })),
     }
   })
@@ -205,9 +205,11 @@ export function useStatus(): { loaded: boolean; error: string | null } {
 }
 
 // Each profile only sees the events it created (see ownsEvent in lib/profile).
+// The Events window lists all of them; the Tracker lists the ones that are gigs. A gig is an event too, so
+// its photos are browsed in Events.
 export function useEvents(mode: Mode): EventView[] {
   const { ownsEvent } = useProfiles()
-  return useStore().events.filter((e) => e.mode === mode && ownsEvent(e.id))
+  return useStore().events.filter((e) => (mode === 'personal' || e.mode === 'pro') && ownsEvent(e.id))
 }
 
 export function useEvent(id: number): EventView | undefined {
@@ -237,18 +239,50 @@ export async function createEvent(input: {
   name: string
   eventType: string
   date: string
+  venue?: string
   client?: string
+  fee?: number
 }): Promise<number> {
   const created = await api.createEvent({
     mode: input.mode,
     name: input.name,
     event_type: input.eventType,
     date: input.date,
-    ...(input.mode === 'pro' ? { client: input.client || null, paid: false, status: 'inquiry' as const } : {}),
+    venue: input.venue || null,
+    ...(input.mode === 'pro'
+      ? { client: input.client || null, fee: input.fee ?? null, paid: false, status: 'inquiry' as const }
+      : {}),
   })
   await api.applyTemplate(created.id, input.eventType)
   setState({ events: [await loadEvent(created), ...state.events] })
   return created.id
+}
+
+export type EventDetails = { name: string; date: string; venue: string; client: string; fee: number | null; paid: boolean }
+
+// Edits what was typed when the event was made. Client, fee and paid are sent for gigs only.
+export async function updateDetails(event: EventView, details: EventDetails): Promise<void> {
+  const { name, date, venue, client, fee, paid } = details
+  await api.updateEvent(event.id, {
+    name,
+    date: date || null,
+    venue: venue || null,
+    ...(event.mode === 'pro' ? { client: client || null, fee, paid } : {}),
+  })
+  await reloadEvent(event.id)
+}
+
+// Starts tracking an event that is already in Events as a gig. Its photos and list stay as they are.
+export async function trackEvent(eventId: number, gig: { client?: string; venue?: string; fee?: number }): Promise<void> {
+  await api.updateEvent(eventId, {
+    mode: 'pro',
+    status: 'inquiry',
+    paid: false,
+    client: gig.client || null,
+    fee: gig.fee ?? null,
+    ...(gig.venue ? { venue: gig.venue } : {}),
+  })
+  await reloadEvent(eventId)
 }
 
 // The checklist is the user's: a preset only fills it in to begin with. Every change re-labels the event.

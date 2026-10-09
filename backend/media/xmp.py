@@ -32,8 +32,9 @@ def _exiftool(args: list[str], *common: str) -> subprocess.CompletedProcess:
     `common` applies to every -execute command (ExifTool does not allow -common_args inside an argfile)."""
     try:
         return subprocess.run(
-            ["exiftool", "-@", "-", "-common_args", "-charset", "filename=utf8", *common],
+            [config.tool("exiftool"), "-@", "-", "-common_args", "-charset", "filename=utf8", *common],
             input="\n".join(args).encode("utf-8"), capture_output=True, timeout=config.EXIFTOOL_TIMEOUT,
+            creationflags=config.NO_WINDOW,
         )
     except FileNotFoundError as e:
         raise ExifToolMissing("ExifTool isn't installed. Install it, then try again.") from e

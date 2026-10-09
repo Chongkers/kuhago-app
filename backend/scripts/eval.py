@@ -103,13 +103,15 @@ def embed_set(set_dir: Path) -> tuple:
     return emb, labels, taken, hashes, queries, len(labels) / secs
 
 
-def render(name: str, template: str, r: dict, speed: float) -> str:
+def render(name: str, template: str, r: dict, speed: float, provenance: str) -> str:
     pct = lambda x: f"{100 * x:.1f}%"  # noqa: E731
     d = r["dups"]
     fl, n = r["missed_recall"]
     s_hit, s_n = r["search"]
     lines = [
         f"## {name} (template: {template}, {r['n']} photos)",
+        "",
+        f"Labels: {provenance}",
         "",
         "| metric | value |",
         "|---|---|",
@@ -151,7 +153,9 @@ def main():
     for s in a.sets:
         emb, labels, taken, hashes, queries, speed = embed_set(s)
         r = score_set(emb, labels, taken, hashes, TEMPLATES[a.template], queries)
-        parts.append(render(s.name, a.template, r, speed))
+        notes = s / "NOTES.md"  # its title says where the labels came from (e.g. drafts, synthetic duplicates)
+        provenance = notes.read_text(encoding="utf-8").splitlines()[0].lstrip("# ") if notes.exists() else "no NOTES.md"
+        parts.append(render(s.name, a.template, r, speed, provenance))
     a.out.write_text("\n".join(parts), encoding="utf-8")
     print(a.out.read_text(encoding="utf-8"))
 

@@ -48,8 +48,8 @@ def _ingest(report, event_id: int, folders: list[Path]) -> None:
     with closing(db.connect()) as con:
         known = {r["path"] for r in con.execute("SELECT path FROM media WHERE event_id = ?", (event_id,))}
     found = [p for folder in folders for p in folder.rglob("*") if p.is_file()]
-    files = sorted({p for p in found if p.suffix.lower() in config.IMAGE_EXTS and str(p) not in known})
-    # ponytail: photos only; videos (ffmpeg frames + VAD) and RAW (rawpy) land with A11
+    files = sorted({p for p in found if p.suffix.lower() in config.IMAGE_EXTS | config.RAW_EXTS and str(p) not in known})
+    # ponytail: photos only; videos (ffmpeg frames + VAD) land with the talking/scenery task
     if videos := sum(p.suffix.lower() in config.VIDEO_EXTS for p in found):
         log.info("skipping %d videos: not supported yet", videos)
 

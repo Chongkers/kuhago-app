@@ -47,6 +47,7 @@ SELECT_MIN_RATING = 3
 
 # Ingest
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp"}
+RAW_EXTS = {".cr2", ".cr3", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2"}
 VIDEO_EXTS = {".mp4", ".mov"}
 
 

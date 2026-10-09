@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import type { ChatMessage } from '../api/client'
 import { addMoment, askOwl, owlModel, type EventView, type Thumb as ThumbData } from '../api/data'
@@ -9,12 +9,12 @@ import { useAction } from '../lib/useAction'
 import { Notice, Owl, Thumb } from './ui'
 
 // failed: the reply is the reason nothing came back, so it is shown but never sent on as conversation.
-// moments: ones the user can add with a click; photos: what matched when they asked to find something.
+// moments: a list the user can add from with a click; photos: what matched when they asked to find something.
 type Message = { from: 'you' | 'owl'; text: string; failed?: boolean; moments?: string[]; photos?: ThumbData[] }
 
 const SUGGESTIONS = {
   personal: ['What did we miss?', 'Suggest themes for these photos', 'Find the group photos', 'Write a caption for the family group chat'],
-  pro: ['Which shots am I missing?', 'Suggest moments to add to the shot list', 'Find the wide shots', 'Draft a client delivery note'],
+  pro: ['Which shots am I missing?', 'Make me a shot list for this gig', 'Find the wide shots', 'Draft a client delivery note'],
 }
 
 // Conversations are kept in this browser, one per event, so they are still there after a reload.
@@ -87,21 +87,24 @@ export function useOwlChat(event?: EventView) {
 
 type Chat = ReturnType<typeof useOwlChat>
 
-// The moments a reply offers. One click adds one and re-sorts the photos; it then reads as added for as long
-// as it is on the list.
-function MomentChips({ event, moments }: { event: EventView; moments: string[] }) {
+// The list a reply offers: a shot list for a gig, moments for an event. Each line is added with a click, or all
+// of them at once; adding re-sorts the photos. A line reads as added for as long as it is on the event's list.
+function MomentList({ event, moments }: { event: EventView; moments: string[] }) {
   const prefs = usePrefs()
   const { error, run } = useAction()
   const [adding, setAdding] = useState<string | null>(null)
   const have = new Set(event.moments.map((m) => m.moment.toLowerCase()))
+  const left = moments.filter((name) => !have.has(name.toLowerCase()))
 
-  function add(name: string) {
-    setAdding(name)
+  function add(names: string[]) {
     run(async () => {
       try {
         // with a model, the engine describes what such a photo looks like, which is what the sorting matches on
         const model = (await owlModel(prefs.model)) ?? undefined
-        await addMoment(event.id, name, { model })
+        for (const name of names) {
+          setAdding(name)
+          await addMoment(event.id, name, { model })
+        }
       } finally {
         setAdding(null)
       }
@@ -109,24 +112,39 @@ function MomentChips({ event, moments }: { event: EventView; moments: string[] }
   }
 
   return (
-    <div className="mt-2">
-      <div className="flex flex-wrap gap-1.5">
-        {moments.map((name) => {
-          const added = have.has(name.toLowerCase())
-          return (
-            <button
-              key={name}
-              type="button"
-              disabled={added || adding !== null}
-              onClick={() => add(name)}
-              className="rounded-full border border-neutral-950 bg-white px-3 py-1 text-sm font-medium hover:bg-neutral-950 hover:text-white disabled:border-neutral-300 disabled:bg-neutral-100 disabled:text-neutral-600"
-            >
-              {added ? `✓ ${name}` : adding === name ? `Adding ${name}…` : `+ ${name}`}
-            </button>
-          )
-        })}
+    <div className="mt-2 rounded-xl border border-neutral-200 bg-white">
+      <div className="flex items-center justify-between gap-3 border-b border-neutral-200 px-3 py-2">
+        <p className="font-display text-sm font-semibold">
+          {event.mode === 'pro' ? 'Suggested shot list' : 'Suggested moments'}
+        </p>
+        {left.length > 1 && (
+          <button type="button" disabled={adding !== null} onClick={() => add(left)} className="text-sm font-medium underline disabled:opacity-50">
+            Add all {left.length}
+          </button>
+        )}
       </div>
-      <Notice>{error}</Notice>
+      <ol className="divide-y divide-neutral-200">
+        {moments.map((name, i) => (
+          <li key={name} className="flex items-center justify-between gap-3 px-3 py-1.5 text-sm">
+            <span className="min-w-0">
+              <span className="mr-2 font-mono text-xs text-neutral-600">{i + 1}</span>
+              {name}
+            </span>
+            {have.has(name.toLowerCase()) ? (
+              <span className="shrink-0 text-xs text-neutral-600">✓ On the list</span>
+            ) : (
+              <button type="button" disabled={adding !== null} onClick={() => add([name])} className="shrink-0 font-medium underline disabled:opacity-50">
+                {adding === name ? 'Adding…' : '+ Add'}
+              </button>
+            )}
+          </li>
+        ))}
+      </ol>
+      {error && (
+        <div className="px-3 pb-2">
+          <Notice>{error}</Notice>
+        </div>
+      )}
     </div>
   )
 }
@@ -145,7 +163,7 @@ export function Bubbles({ chat }: { chat: Chat }) {
             <Owl className="mt-1 h-6 w-6 shrink-0" />
             <div className="max-w-[85%] min-w-0">
               <p className={`${says} w-fit`}>{m.text}</p>
-              {m.moments && m.moments.length > 0 && chat.event && <MomentChips event={chat.event} moments={m.moments} />}
+              {m.moments && m.moments.length > 0 && chat.event && <MomentList event={chat.event} moments={m.moments} />}
               {m.photos && m.photos.length > 0 && (
                 <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
                   {m.photos.map((photo) => (
@@ -207,10 +225,17 @@ export function ClearChat({ chat }: { chat: Chat }) {
   )
 }
 
-// The compact card on an event page.
+// The compact card on an event page. The conversation scrolls inside the card, newest at the bottom, so the
+// card stays the same height however long the chat gets.
 export default function OwlCard({ event }: { event: EventView }) {
   const prefs = usePrefs()
   const chat = useOwlChat(event)
+  const scroller = useRef<HTMLDivElement>(null)
+  const shown = chat.messages.length + (chat.busy ? 1 : 0)
+  // a reply swaps "Thinking…" for a message, so the count alone would miss it
+  useEffect(() => {
+    scroller.current?.scrollTo({ top: scroller.current.scrollHeight })
+  }, [chat.messages.length, chat.busy])
   if (!prefs.owlEnabled) return null
 
   return (
@@ -224,9 +249,14 @@ export default function OwlCard({ event }: { event: EventView }) {
         </Link>
       </div>
       <p className="w-fit rounded-full border border-neutral-400 px-2.5 py-0.5 font-mono text-xs">Ollama · on this laptop</p>
-      <Bubbles chat={chat} />
-      <Suggestions mode={event.mode} chat={chat} />
-      <Composer chat={chat} placeholder="Ask about this event…" />
+      {shown > 0 ? (
+        <div ref={scroller} className="-mr-2 max-h-96 overflow-y-auto pr-2">
+          <Bubbles chat={chat} />
+        </div>
+      ) : (
+        <Suggestions mode={event.mode} chat={chat} />
+      )}
+      <Composer chat={chat} placeholder={`Ask about this ${term('event', event.mode).toLowerCase()}…`} />
       <ClearChat chat={chat} />
     </section>
   )

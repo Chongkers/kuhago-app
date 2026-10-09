@@ -77,7 +77,7 @@ def test_ingest_two_folders_skips_bad_files_then_search(tmp_path):
 
     from app.main import app
 
-    client = TestClient(app)  # no `with`: lifespan (CLIP load) never runs
+    client = TestClient(app, base_url="http://testserver/api")  # no `with`: lifespan (CLIP load) never runs
     progress = _ingest(client, ev, [a, b])
     assert progress[-1]["stage"] == "done"
     assert {"stage": "previews", "done": 4, "total": 4} in progress  # 4 image files seen, txt ignored
@@ -108,7 +108,7 @@ def test_ingest_two_folders_skips_bad_files_then_search(tmp_path):
 def test_ingest_rejects_bad_input(tmp_path):
     from app.main import app
 
-    client = TestClient(app)
+    client = TestClient(app, base_url="http://testserver/api")
     assert client.post("/events/999/ingest", json={"folders": [str(tmp_path)]}).status_code == 404
     ev = _event()
     assert client.post(f"/events/{ev}/ingest", json={"folders": [str(tmp_path / "nope")]}).status_code == 400
@@ -123,6 +123,6 @@ def test_second_ingest_while_running_is_rejected(tmp_path):
     ev = _event()
     ingest._running.add(ev)
     try:
-        assert TestClient(app).post(f"/events/{ev}/ingest", json={"folders": [str(tmp_path)]}).status_code == 409
+        assert TestClient(app, base_url="http://testserver/api").post(f"/events/{ev}/ingest", json={"folders": [str(tmp_path)]}).status_code == 409
     finally:
         ingest._running.discard(ev)

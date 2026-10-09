@@ -7,7 +7,8 @@ from app import config
 
 
 def _run(cmd: list[str]) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, capture_output=True, check=True, timeout=config.FFMPEG_TIMEOUT)
+    cmd = [config.tool(cmd[0]), *cmd[1:]]
+    return subprocess.run(cmd, capture_output=True, check=True, timeout=config.FFMPEG_TIMEOUT, creationflags=config.NO_WINDOW)
 
 
 def extract_frames(src: Path, out_dir: Path) -> list[Path]:

@@ -3,12 +3,12 @@ import { BarePage } from '../components/Shell'
 import { useMode } from '../lib/mode'
 import { useProfiles } from '../lib/profile'
 import { btnPrimary, btnSecondary } from '../lib/styles'
-import type { Mode } from '../lib/terms'
+import { term, type Mode } from '../lib/terms'
 
 const CHOICES: { mode: Mode; kicker: string; title: string; body: string; cta: string; button: string }[] = [
   {
     mode: 'personal',
-    kicker: 'Personal',
+    kicker: term('window', 'personal'),
     title: "I'm organizing my own photos",
     body: 'Birthdays, Noche Buena, barkada trips, graduations. Phone photos and videos.',
     cta: 'Get started',
@@ -16,10 +16,10 @@ const CHOICES: { mode: Mode; kicker: string; title: string; body: string; cta: s
   },
   {
     mode: 'pro',
-    kicker: 'Pro',
+    kicker: term('window', 'pro'),
     title: 'I shoot for clients',
     body: 'Debuts, weddings, binyag. RAW files, shot lists, A-roll / B-roll, XMP for your editor.',
-    cta: 'Set up Pro',
+    cta: 'Open the tracker',
     button: btnSecondary,
   },
 ]
@@ -59,7 +59,7 @@ export default function Welcome() {
           </section>
         ))}
       </div>
-      <p className="mt-10 text-center text-sm text-neutral-600">You can switch modes any time in Settings.</p>
+      <p className="mt-10 text-center text-sm text-neutral-600">You can switch between Events and Tracker any time, from the sidebar.</p>
     </BarePage>
   )
 }

@@ -99,6 +99,11 @@ async function hashPin(pin: string, salt: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
+// "system" follows the OS.
+export function isDark(theme: Theme): boolean {
+  return theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+}
+
 export function initials(name: string): string {
   const letters = name
     .trim()
@@ -228,8 +233,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const query = window.matchMedia('(prefers-color-scheme: dark)')
     const apply = () => {
-      const dark = theme === 'dark' || (theme === 'system' && query.matches)
-      document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+      document.documentElement.dataset.theme = isDark(theme) ? 'dark' : 'light'
     }
     apply()
     query.addEventListener('change', apply)

@@ -39,8 +39,9 @@ def _open_raw(src: Path) -> tuple[Image.Image, int]:
             return Image.open(BytesIO(thumb.data)), flip
         return Image.fromarray(thumb.data), flip
     except rawpy.LibRawError:
-        cmd = ["exiftool", "-b", "-PreviewImage", str(src)]
-        return Image.open(BytesIO(subprocess.run(cmd, capture_output=True, check=True, timeout=60).stdout)), flip
+        cmd = [config.tool("exiftool"), "-b", "-PreviewImage", str(src)]
+        out = subprocess.run(cmd, capture_output=True, check=True, timeout=60, creationflags=config.NO_WINDOW).stdout
+        return Image.open(BytesIO(out)), flip
 
 
 def make_preview(src: Path, out_dir: Path) -> tuple[Path, str]:

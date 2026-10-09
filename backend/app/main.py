@@ -1,7 +1,8 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from app import config, jobs
 from app.routes import coverage, dialog, events, export, finals, ingest, media, owl, search, shot_items, xmp
@@ -23,21 +24,28 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Kuha", lifespan=lifespan)
+# CORS is for the Vite dev server only; the built UI is served from this same address and needs none
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.include_router(events.router)
-app.include_router(coverage.router)
-app.include_router(ingest.router)
-app.include_router(export.router)
-app.include_router(media.router)
-app.include_router(search.router)
-app.include_router(shot_items.router)
-app.include_router(finals.router)
-app.include_router(xmp.router)
-app.include_router(owl.router)
-app.include_router(dialog.router)
-app.include_router(jobs.router)
+# Everything the engine answers is under /api: the UI's own pages (/events, /owl, ...) have the same paths, and in
+# a build one server serves both.
+api = APIRouter(prefix="/api")
+for module in (events, coverage, ingest, export, media, search, shot_items, finals, xmp, owl, dialog, jobs):
+    api.include_router(module.router)
+app.include_router(api)
+
+
+@app.get("/{path:path}", include_in_schema=False)
+def ui(path: str):
+    """The built UI (`vite build`). Any path that is not a file is one of its pages, so it gets index.html and
+    refreshing the browser on /events/3 works. Under the Vite dev server there is no build and this is a 404."""
+    if path == "api" or path.startswith("api/") or not config.UI_DIR.is_dir():
+        raise HTTPException(404, "There's nothing at this address.")
+    file = (config.UI_DIR / path).resolve()
+    if path and file.is_file() and file.is_relative_to(config.UI_DIR.resolve()):
+        return FileResponse(file)
+    return FileResponse(config.UI_DIR / "index.html", headers={"Cache-Control": "no-cache"})  # a new build shows at once

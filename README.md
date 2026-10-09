@@ -56,7 +56,7 @@ It works for everyone:
 ## How it works
 
 ```
-React UI (localhost:5173)  ──REST/SSE──►  FastAPI backend (localhost:8000)
+React UI (localhost:5173)  ──REST/SSE──►  FastAPI backend (localhost:8000/api)
                                             ├─ Previews: Pillow + pillow-heif (phone) / rawpy (RAW)
                                             ├─ Video: FFmpeg frames + Silero VAD
                                             ├─ Embeddings: OpenCLIP ViT-B-32
@@ -127,6 +127,31 @@ Use any folder of event photos and videos (phone or camera). In the app:
 
 ### Verify it's offline
 After `download_models.py`, turn off Wi-Fi and run the full flow. Nothing breaks.
+
+### Windows: Kuha.exe (no Python, Node or terminal)
+
+**Build** (on a machine with the setup above, once per release):
+```
+build.bat
+```
+It builds the UI, freezes the engine with PyInstaller into `dist\Kuha\` (about 1.8 GB: PyTorch, the CLIP weights, and the FFmpeg and ExifTool found on your `PATH`), then wraps that folder in one installer, `dist\KuhaSetup.exe` (about 860 MB). Share the installer.
+- The installer step needs [Inno Setup 6](https://jrsoftware.org/isdl.php) (`winget install JRSoftware.InnoSetup`). Without it the build says so and stops after `dist\Kuha\`, which also runs as is: double-click `Kuha.exe` inside it.
+- `-NoInstaller` skips the installer step (it takes a few minutes). `-ImportDevData` also copies the events from this checkout's `data\` into the place Kuha.exe keeps its data.
+
+**Install:** run `KuhaSetup.exe`. It installs for the current user only, asks for no administrator password, and adds Kuha to the Start menu and, if you leave the box ticked, the desktop. Copying the files takes a few minutes.
+
+**Run:** open Kuha from the Start menu or the desktop.
+- Kuha opens in its own window, with no browser and no terminal. It shows "Starting Kuha…" while the AI model loads (up to a minute or so on a laptop CPU), then the app.
+- **To quit, close the window.** That stops Kuha completely; nothing keeps running in the background. If Kuha is in the middle of organizing or exporting, it asks before quitting.
+- Opening Kuha again while it is running brings its window to the front.
+- Your events are stored in `%LOCALAPPDATA%\Kuha\data`, your profile and chats in `%LOCALAPPDATA%\Kuha\webview`. If Kuha can't start, it says so and points to its log, `%LOCALAPPDATA%\Kuha\logs\kuha.log`.
+- The window keeps its own profile and chats. Ones you made in a browser tab (the developer setup, or an older Kuha.exe) do not appear in it.
+- Made to work with Wi-Fi off: nothing is downloaded on first run. Ask KuhaGo still needs [Ollama](https://ollama.com/) installed separately.
+- The window needs the Microsoft Edge WebView2 runtime, which is part of Windows 11. On a Windows 10 machine without it, Kuha opens in your browser instead and sits in the system tray (near the clock); right-click its icon → **Quit Kuha** to stop it.
+
+**Uninstall:** Settings → Apps → Installed apps → Kuha → Uninstall. This removes the program and its shortcuts. Your events, profile and chats in `%LOCALAPPDATA%\Kuha` are left alone; delete that folder yourself if you want them gone too.
+
+`run.bat` remains the way to start Kuha for development.
 
 ---
 

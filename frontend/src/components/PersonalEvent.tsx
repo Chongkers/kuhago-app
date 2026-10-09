@@ -4,14 +4,16 @@ import { addExamples, removeMedia, searchMedia, type EventView, type Thumb as Th
 import { count, formatDate } from '../lib/format'
 import { backLink, btnPrimary, btnSecondary, card, input, panel } from '../lib/styles'
 import { templateLabel } from '../lib/templates'
+import { useMode } from '../lib/mode'
 import { rollLabel, term } from '../lib/terms'
 import { useAction } from '../lib/useAction'
 import CoverageCard from './CoverageCard'
+import { EditEventModal } from './EventForm'
 import FirstSteps from './FirstSteps'
 import OrganizeCard from './OrganizeCard'
 import OwlCard from './OwlChat'
 import PhotoViewer from './PhotoViewer'
-import { ImagePicker, Notice, Owl, Thumb } from './ui'
+import { ImagePicker, Modal, Notice, Owl, Thumb } from './ui'
 import { Page } from './Shell'
 
 type Tab = 'moments' | 'highlights' | 'clips' | 'unsorted'
@@ -32,7 +34,10 @@ function Tile({ thumbs, index, open, className }: { thumbs: ThumbData[]; index: 
   )
 }
 
-function Moments({ event, open }: { event: EventView; open: Open }) {
+// how many photos of a moment the page shows before "View all"
+const ROW = 6
+
+function Moments({ event, open, onViewAll }: { event: EventView; open: Open; onViewAll: (moment: string) => void }) {
   // everything was added but nothing fit the list: say what to do instead of showing an empty tab
   if (event.moments.every((m) => m.count === 0)) {
     return (
@@ -55,10 +60,16 @@ function Moments({ event, open }: { event: EventView; open: Open }) {
           <section key={m.moment}>
             <div className="flex items-baseline justify-between">
               <h3 className="font-semibold">{m.moment}</h3>
-              <span className="text-xs text-neutral-600">{count(m.count, 'photo')}</span>
+              {m.thumbs.length > ROW ? (
+                <button type="button" onClick={() => onViewAll(m.moment)} className="text-sm font-medium underline">
+                  View all {m.count}
+                </button>
+              ) : (
+                <span className="text-xs text-neutral-600">{count(m.count, 'photo')}</span>
+              )}
             </div>
             <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
-              {m.thumbs.map((thumb, i) => (
+              {m.thumbs.slice(0, ROW).map((thumb, i) => (
                 <Tile key={thumb.id} thumbs={m.thumbs} index={i} open={open} className="aspect-square w-full" />
               ))}
             </div>
@@ -99,7 +110,7 @@ function Clips({ event }: { event: EventView }) {
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {(['A', 'B'] as const).map((roll) => (
           <div key={roll} className={`${card} flex items-center gap-3 p-3 shadow-none`}>
-            <div className="grid h-14 w-20 shrink-0 place-items-center rounded-lg bg-neutral-300 text-white">▶</div>
+            <div className="grid h-14 w-20 shrink-0 place-items-center rounded-lg bg-neutral-300 text-neutral-700">▶</div>
             <div>
               <p className="font-display font-semibold">
                 {rollLabel(roll, event.mode)} · {event.clips[roll].count}
@@ -113,7 +124,10 @@ function Clips({ event }: { event: EventView }) {
   )
 }
 
-export default function PersonalEvent({ event }: { event: EventView }) {
+// tracked: the event is also a gig, so it has a second page in the Tracker
+export default function PersonalEvent({ event, tracked = false }: { event: EventView; tracked?: boolean }) {
+  const { setMode } = useMode()
+  const [editing, setEditing] = useState(false)
   const [tab, setTab] = useState<Tab>('moments')
   const [query, setQuery] = useState('')
   const search = useAction()
@@ -124,6 +138,9 @@ export default function PersonalEvent({ event }: { event: EventView }) {
   const empty = event.photos + event.videos === 0 || !!event.ingest
   const [viewing, setViewing] = useState<{ thumbs: ThumbData[]; index: number } | null>(null)
   const open: Open = (thumbs, index) => setViewing({ thumbs, index })
+  // the moment whose photos are all on show in a window
+  const [allOf, setAllOf] = useState<string | null>(null)
+  const all = event.moments.find((m) => m.moment === allOf && m.count > 0)
 
   // the viewer moves on to the next photo of the grid it was opened from, and closes after the last one
   async function remove(thumb: ThumbData) {
@@ -162,11 +179,30 @@ export default function PersonalEvent({ event }: { event: EventView }) {
         </form>
       }
       right={
-        <Link to={`/events/${event.id}/export`} className={btnPrimary}>
-          {term('export', event.mode)}
-        </Link>
+        <>
+          {tracked && (
+            // same address: the Tracker window shows this event's gig page
+            <button type="button" onClick={() => setMode('pro')} className={btnSecondary}>
+              Open in {term('window', 'pro')}
+            </button>
+          )}
+          <Link to={`/events/${event.id}/export`} className={btnPrimary}>
+            {term('export', event.mode)}
+          </Link>
+        </>
       }
     >
+      {editing && <EditEventModal event={event} onClose={() => setEditing(false)} />}
+      {/* a photo opened from this window covers it; closing the photo comes back here */}
+      {all && !viewing && (
+        <Modal wide title={`${all.moment} · ${count(all.count, 'photo')}`} onClose={() => setAllOf(null)}>
+          <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-6">
+            {all.thumbs.map((thumb, i) => (
+              <Tile key={thumb.id} thumbs={all.thumbs} index={i} open={open} className="aspect-square w-full" />
+            ))}
+          </div>
+        </Modal>
+      )}
       {viewing && (
         <PhotoViewer
           thumbs={viewing.thumbs}
@@ -195,10 +231,15 @@ export default function PersonalEvent({ event }: { event: EventView }) {
       <Link to="/" className={backLink}>
         ← {term('eventsTitle', event.mode)}
       </Link>
-      <h1 className="mt-1 text-3xl font-bold tracking-tight">{event.name}</h1>
+      <div className="mt-1 flex flex-wrap items-baseline gap-x-3">
+        <h1 className="text-3xl font-bold tracking-tight">{event.name}</h1>
+        <button type="button" onClick={() => setEditing(true)} className="text-sm font-medium underline">
+          Edit details
+        </button>
+      </div>
       <p className="mt-1 text-sm text-neutral-600">
-        {templateLabel(event.eventType)} · {formatDate(event.date, event.endDate)} · {count(event.photos, 'photo')} ·{' '}
-        {count(event.videos, 'video')}
+        {templateLabel(event.eventType)} · {formatDate(event.date, event.endDate)}
+        {event.venue ? ` · ${event.venue}` : ''} · {count(event.photos, 'photo')} · {count(event.videos, 'video')}
         {event.sources ? ` from ${count(event.sources, 'phone')}` : ''}
       </p>
       <FirstSteps event={event} />
@@ -224,7 +265,7 @@ export default function PersonalEvent({ event }: { event: EventView }) {
         <div className="space-y-9">
           {!empty && (
             <>
-              {tab === 'moments' && <Moments event={event} open={open} />}
+              {tab === 'moments' && <Moments event={event} open={open} onViewAll={setAllOf} />}
               {(tab === 'moments' || tab === 'highlights') && <Highlights event={event} open={open} />}
               {(tab === 'moments' || tab === 'clips') && <Clips event={event} />}
               {tab === 'unsorted' && (

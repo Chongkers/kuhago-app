@@ -1,0 +1,4 @@
+# Only for building Kuha.exe (build.ps1); the dev setup does not need these
+pyinstaller
+pywebview
+pystray

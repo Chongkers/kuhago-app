@@ -51,8 +51,9 @@ def owl_status():
     return {**out, "connected": True, "models": [m["name"] for m in tags.get("models", []) if "name" in m]}
 
 
-def _facts(event_id: int) -> tuple[str, list[str]]:
-    """What the assistant is told about an event, and the moments already on its list."""
+def _facts(event_id: int) -> tuple[str, list[str], int]:
+    """What the assistant is told about an event, the moments already on its list, and how many photos and
+    videos it has."""
     with closing(db.connect()) as con:
         ev = con.execute("SELECT name, event_type, date, venue FROM events WHERE id = ?", (event_id,)).fetchone()
         if not ev:
@@ -90,7 +91,7 @@ def _facts(event_id: int) -> tuple[str, list[str]]:
             "What an image model sees most often in them (with how many). This is what the photos really show, even"
             " when it doesn't fit the kind of event: " + "; ".join(tags)
         )
-    return "\n".join(lines), [c["moment"] for c in coverage]
+    return "\n".join(lines), [c["moment"] for c in coverage], len(media)
 
 
 def _chat(model: str, messages: list[dict], timeout: float = config.OLLAMA_TIMEOUT, **options) -> str:
@@ -310,7 +311,7 @@ def ask(event_id: int, body: AskIn):
     """One reply about an event. When the user asks for themes or moments it also carries names they can add
     with a click; when they ask to find something, it is the photos CLIP matches. Nothing is saved here."""
     model = body.model or config.OLLAMA_MODEL
-    facts, have = _facts(event_id)
+    facts, have, media = _facts(event_id)
     history = [m.model_dump() for m in body.messages[-config.OWL_HISTORY_MESSAGES :]]
     asked = body.messages[-1].content if body.messages[-1].role == "user" else ""
 
@@ -325,16 +326,25 @@ def ask(event_id: int, body: AskIn):
 
     # names only: the captions CLIP needs are written when a moment is added (visible_prompts). Asked for both
     # at once, a small model fills the captions with filler.
-    facts += (
-        "\nMoments are the themes or subjects the photos are sorted into. The user can add the names you put in"
-        f' "moments" with one click. Put there at most {config.OWL_MAX_SUGGESTIONS} new names that answer their last'
-        " message. Go by what the image model sees in the photos, not by the event's name or kind: the photos may"
-        " show something else. Leave out moments that are already on the list. If the user named one, use their"
-        ' name. A name is 1 to 4 words. In "reply", say in one or two sentences what you suggest and why.'
-        ' Reply with JSON only: "reply" is your sentences, "moments" is the list of names.'
+    # A gig that hasn't been shot yet has nothing to look at: its list is planned from the kind of event.
+    basis = (
+        "Go by what the image model sees in the photos, not by the event's name or kind: the photos may show"
+        " something else. If the user asks for a list for a kind of event, go by that kind of event."
+        if media
+        else "There are no photos yet, so go by the event's name and kind, or the kind of event the user names:"
+        " list what is worth photographing at such an event."
     )
-    names = {"type": "array", "items": {"type": "string"}, "maxItems": config.OWL_MAX_SUGGESTIONS}
-    schema = {"type": "object", "properties": {"reply": {"type": "string"}, "moments": names}, "required": ["reply", "moments"]}
+    facts += (
+        "\nMoments are the themes or subjects the photos are sorted into; a shot list is a list of moments. The user"
+        ' sees the names you put in "moments" as a list and adds them with one click. Put there at most'
+        f" {config.OWL_MAX_SUGGESTIONS} new names that answer their last message: every name you suggest goes in"
+        f' "moments", never only in "reply". {basis} Leave out moments that are already on the list. If the user'
+        ' named one, use their name. A name is 1 to 4 words. In "reply", say in one or two sentences what you'
+        ' suggest and why. Reply with JSON only: "moments" is the list of names, "reply" is your sentences.'
+    )
+    # the list comes first in the reply, so the sentences are about the names that were really listed
+    names = {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": config.OWL_MAX_SUGGESTIONS}
+    schema = {"type": "object", "properties": {"moments": names, "reply": {"type": "string"}}, "required": ["reply", "moments"]}
     out = _json_chat(model, [{"role": "system", "content": facts}, *history], schema)
     moments = _new_names(out.get("moments"), have)
     reply = out["reply"].strip() if isinstance(out.get("reply"), str) else ""

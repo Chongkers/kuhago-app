@@ -19,7 +19,7 @@ from test_ingest_search import _event, _ingest, e, fakes  # noqa: F401  (fakes i
 def client():
     from app.main import app
 
-    return TestClient(app)  # no `with`: lifespan (CLIP load) never runs
+    return TestClient(app, base_url="http://testserver/api")  # no `with`: lifespan (CLIP load) never runs
 
 
 @pytest.fixture

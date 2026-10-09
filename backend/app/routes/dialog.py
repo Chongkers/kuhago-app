@@ -6,6 +6,8 @@ import threading
 
 from fastapi import APIRouter, HTTPException
 
+from app import config
+
 log = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -26,17 +28,25 @@ for _ in sys.stdin:
     print(filedialog.askdirectory(parent=root, title="Choose a folder", mustexist=True), flush=True)
 """
 
+HELPER_FLAG = "--pick-folder"  # Kuha.exe started with this runs the helper and nothing else (launcher.py)
+
 _proc: subprocess.Popen | None = None
 _lock = threading.Lock()  # one window at a time; the helper answers one line per request
+
+
+def run_helper() -> None:
+    exec(_HELPER, {"__name__": "__main__"})
 
 
 def _helper() -> subprocess.Popen:
     """The running helper, started if there is none (first use, or it died)."""
     global _proc
     if _proc is None or _proc.poll() is not None:
+        # frozen, sys.executable is Kuha.exe, which has no `-c`: that would start a second engine
+        cmd = [sys.executable, HELPER_FLAG] if config.FROZEN else [sys.executable, "-c", _HELPER]
         _proc = subprocess.Popen(
-            [sys.executable, "-c", _HELPER], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL, text=True, encoding="utf-8",
+            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, text=True, encoding="utf-8", creationflags=config.NO_WINDOW,
         )
         if _proc.stdout.readline().strip() != "ready":  # no Tk on this machine, or no display
             _proc.kill()

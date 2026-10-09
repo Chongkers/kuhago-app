@@ -5,7 +5,7 @@
 
 import { useSyncExternalStore } from 'react'
 import type { Mode } from '../lib/terms'
-import { api, watchJob, type EventStatus, type KuhaEvent, type Media } from './client'
+import { api, watchJob, type EventStatus, type ExportPlan, type KuhaEvent, type Media } from './client'
 
 export type SidecarMode = 'lightroom' | 'darktable' | 'rapidraw'
 
@@ -42,7 +42,6 @@ export type EventView = {
   highlights: { moment: string; thumb: Thumb }[]
   highlightCount: number
   clips: { A: Roll; B: Roll }
-  exportSize?: string
   // Pro only
   venue?: string
   client?: string
@@ -50,7 +49,6 @@ export type EventView = {
   paid?: boolean
   status?: EventStatus
   ingest?: { done: number; total: number; folders: string[] }
-  archiveFiles?: number
   xmpWritten?: boolean
 }
 
@@ -259,15 +257,24 @@ export const writeXmp = (_eventId: number, _mode: SidecarMode) => notConnected()
 export const rescanFinals = (_eventId: number) => notConnected()
 export const pickFolder = () => notConnected()
 
-// ponytail: stand-in for the export job's SSE progress (counts up without touching disk) until POST /export lands.
-// Returns a cancel function.
-export function runExport(total: number, onProgress: (done: number) => void): () => void {
-  let done = 0
-  const step = Math.max(1, Math.ceil(total / 40))
-  const timer = setInterval(() => {
-    done = Math.min(total, done + step)
-    onProgress(done)
-    if (done >= total) clearInterval(timer)
-  }, 80)
-  return () => clearInterval(timer)
+export const loadExportPlan = (eventId: number): Promise<ExportPlan> => api.exportPlan(eventId)
+
+// Copy the event into dest on the engine; resolves when the copy job ends.
+export async function runExport(
+  eventId: number,
+  dest: string,
+  onProgress: (done: number, total: number) => void,
+): Promise<void> {
+  const { job_id } = await api.startExport(eventId, dest)
+  await new Promise<void>((resolve, reject) => {
+    watchJob(
+      job_id,
+      (p) => {
+        if (p.stage === 'error') reject(new Error(`Copying stopped: ${p.message ?? 'unknown error'}`))
+        else if (p.stage !== 'done') onProgress(p.done, p.total)
+      },
+      resolve,
+      () => reject(new Error('Lost touch with the engine while copying.')),
+    )
+  })
 }

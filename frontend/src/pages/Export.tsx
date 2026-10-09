@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { missedMoments, pickFolder, runExport, setStatus, useEvent, useFinals } from '../api/data'
+import type { ExportPlan } from '../api/client'
+import { loadExportPlan, missedMoments, pickFolder, runExport, setStatus, useEvent, useFinals } from '../api/data'
 import { Badge, NotFound, Notice, Page, ProgressBar } from '../components/ui'
-import { personalPlan, proPlan } from '../lib/exportPlan'
+import { planRows } from '../lib/exportPlan'
 import { count, listOf } from '../lib/format'
 import { backLink, btnPrimary, btnSecondary, card, input, panel } from '../lib/styles'
 import { term } from '../lib/terms'
@@ -10,33 +11,42 @@ import { useAction } from '../lib/useAction'
 
 export default function Export() {
   const { eventId } = useParams()
-  const event = useEvent(Number(eventId))
-  const finals = useFinals(Number(eventId))
+  const id = Number(eventId)
+  const event = useEvent(id)
+  const finals = useFinals(id)
   const [dest, setDest] = useState('')
-  const [done, setDone] = useState<number | null>(null)
+  const [plan, setPlan] = useState<ExportPlan | null>(null)
+  const [planError, setPlanError] = useState<string | null>(null)
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+  const [copying, setCopying] = useState(false)
   const [markDelivered, setMarkDelivered] = useState(true)
-  const cancel = useRef<(() => void) | null>(null)
   const picker = useAction()
+  const copier = useAction()
+  const mediaCount = event ? event.photos + event.videos : 0
 
-  useEffect(() => () => cancel.current?.(), [])
+  // the backend's dry run; refetched when organizing adds media
+  useEffect(() => {
+    loadExportPlan(id).then(setPlan, (e: Error) => setPlanError(e.message))
+  }, [id, mediaCount])
 
   if (!event) return <NotFound />
 
   const pro = event.mode === 'pro'
-  const plan = pro ? proPlan(event, finals) : personalPlan(event)
-  const total = pro ? (event.archiveFiles ?? event.photos + event.videos) : event.photos + event.videos
+  const total = plan?.copies.length ?? 0
   const missed = missedMoments(event)
-  const copying = done !== null && done < total
-  const finished = done !== null && done >= total
   const eventPath = `/events/${event.id}`
 
   function start() {
     if (!event) return
-    setDone(0)
-    cancel.current = runExport(total, (n) => {
-      setDone(n)
-      if (n >= total && pro && markDelivered) setStatus(event.id, 'delivered')
-    })
+    setProgress({ done: 0, total })
+    setCopying(true)
+    copier.run(() =>
+      runExport(event.id, dest.trim(), (done, total) => setProgress({ done, total }))
+        .then(() => {
+          if (pro && markDelivered) setStatus(event.id, 'delivered')
+        })
+        .finally(() => setCopying(false)),
+    )
   }
 
   return (
@@ -74,13 +84,13 @@ export default function Export() {
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="text-lg font-semibold">{pro ? 'Folder plan (dry run)' : "What you'll get"}</h2>
               <span className="text-sm text-neutral-600">
-                {event.exportSize ? `${event.exportSize} · ` : ''}
                 {count(total, 'file')}
               </span>
             </div>
             <div className="mt-3 overflow-x-auto rounded-xl border border-neutral-200 bg-white p-4 font-mono text-sm leading-relaxed">
-              <p className="whitespace-nowrap">{plan.root}</p>
-              {plan.rows.map((row, i) => (
+              {!plan && <p className="text-neutral-600">{planError ?? 'Working out the folders…'}</p>}
+              {plan && <p className="whitespace-nowrap">{plan.root}/</p>}
+              {plan && planRows(plan).map((row, i) => (
                 <p key={i} className="flex gap-4 whitespace-nowrap" style={{ paddingLeft: `${row.depth}rem` }}>
                   <span className="min-w-56 flex-1">{row.name}</span>
                   <span className="w-24 text-neutral-600">{row.count}</span>
@@ -132,20 +142,21 @@ export default function Export() {
             )}
           </section>
 
-          {done !== null && (
+          {progress && (
             <section className={`${card} p-4`}>
               <div className="flex items-baseline justify-between">
-                <h2 className="text-lg font-semibold">{finished ? 'Copied' : 'Copying…'}</h2>
+                <h2 className="text-lg font-semibold">{copying ? 'Copying…' : copier.error ? 'Stopped' : 'Copied'}</h2>
                 <span className="font-mono text-sm text-neutral-600">
-                  {done.toLocaleString('en-US')} / {total.toLocaleString('en-US')}
+                  {progress.done.toLocaleString('en-US')} / {progress.total.toLocaleString('en-US')}
                 </span>
               </div>
               <div className="mt-2">
-                <ProgressBar done={done} total={total} />
+                <ProgressBar done={progress.done} total={progress.total} />
               </div>
               <p className="mt-2 text-sm text-neutral-600">Nothing leaves your laptop. You can keep browsing.</p>
             </section>
           )}
+          <Notice>{copier.error}</Notice>
 
           {pro && (
             <label className="flex items-center gap-2 px-1">

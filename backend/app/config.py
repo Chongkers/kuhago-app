@@ -35,6 +35,9 @@ PREVIEW_JPEG_QUALITY = 85
 # Search
 SEARCH_K = 24
 
+# Pro: photos rated at least this (or flagged is_select) are selects
+SELECT_MIN_RATING = 3
+
 # Ingest
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp"}
 VIDEO_EXTS = {".mp4", ".mov"}

@@ -66,7 +66,9 @@ def plan_export(con: sqlite3.Connection, event_id: int) -> dict:
 
 
 def execute_export(report, copies: list[dict], dest: Path) -> None:
-    """Background job: copy each planned file under dest. Bad or existing files are skipped, never fatal."""
+    """Background job: copy each planned file under dest. Bad or existing files are skipped, never fatal;
+    files that could not be copied are reported once the rest are done."""
+    failed = 0
     for i, c in enumerate(copies, 1):
         target = dest / c["dest"]
         try:
@@ -77,4 +79,7 @@ def execute_export(report, copies: list[dict], dest: Path) -> None:
                 shutil.copy2(c["src"], target)
         except OSError as e:
             log.warning("skip %s: %s", c["src"], e)
+            failed += 1
         report("copying", i, len(copies))
+    if failed:
+        raise RuntimeError(f"{failed} of {len(copies)} files could not be copied. The rest are in the folder.")

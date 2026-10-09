@@ -1,9 +1,9 @@
 import json
 from contextlib import closing
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, StringConstraints
 
 from app import config, db
 
@@ -15,12 +15,13 @@ TEMPLATES = {p.stem: json.loads(p.read_text(encoding="utf-8")) for p in config.T
 
 Mode = Literal["personal", "pro"]
 Status = Literal["inquiry", "booked", "shot", "editing", "delivered"]
+Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
 class EventPatch(BaseModel):
     # `str = None`: may be omitted, but an explicit null is rejected (non-null in the API contract)
     mode: Mode = None
-    name: str = None
+    name: Name = None
     event_type: str = None
     date: str | None = None
     venue: str | None = None
@@ -32,7 +33,7 @@ class EventPatch(BaseModel):
 
 class EventIn(EventPatch):
     mode: Mode
-    name: str
+    name: Name
     event_type: str
 
 

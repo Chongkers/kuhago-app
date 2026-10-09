@@ -14,16 +14,19 @@ from app import config
 
 register_heif_opener()
 
-_EXIF_IFD, _DATETIME_ORIGINAL = 0x8769, 36867
+_EXIF_IFD, _DATETIME_ORIGINAL, _DATETIME = 0x8769, 36867, 306
 _RAW_FLIP = {3: Image.Transpose.ROTATE_180, 5: Image.Transpose.ROTATE_90, 6: Image.Transpose.ROTATE_270}  # LibRaw sizes.flip
 
 
 def _taken_at(img: Image.Image, src: Path) -> str:
-    raw = img.getexif().get_ifd(_EXIF_IFD).get(_DATETIME_ORIGINAL)
-    try:
-        return datetime.strptime(str(raw).strip("\x00 "), "%Y:%m:%d %H:%M:%S").isoformat()
-    except ValueError:
-        return datetime.fromtimestamp(src.stat().st_mtime).isoformat(timespec="seconds")
+    exif = img.getexif()
+    # RAW embedded previews (e.g. CR3) carry only IFD0 DateTime, not DateTimeOriginal
+    for raw in (exif.get_ifd(_EXIF_IFD).get(_DATETIME_ORIGINAL), exif.get(_DATETIME)):
+        try:
+            return datetime.strptime(str(raw).strip("\x00 "), "%Y:%m:%d %H:%M:%S").isoformat()
+        except ValueError:
+            continue
+    return datetime.fromtimestamp(src.stat().st_mtime).isoformat(timespec="seconds")
 
 
 def _open_raw(src: Path) -> tuple[Image.Image, int]:

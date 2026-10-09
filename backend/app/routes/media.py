@@ -29,6 +29,8 @@ def list_media(event_id: int, moment: str | None = None, roll: str | None = None
     if highlights:
         sql += " AND is_highlight = 1"
     with closing(db.connect()) as con:
+        if not con.execute("SELECT 1 FROM events WHERE id = ?", (event_id,)).fetchone():
+            raise HTTPException(404, "event not found")
         return [media_out(r) for r in con.execute(sql + " ORDER BY taken_at, id", args)]
 
 

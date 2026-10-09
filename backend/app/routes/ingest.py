@@ -30,7 +30,7 @@ def start_ingest(event_id: int, body: IngestIn):
     folders = [Path(f).expanduser().resolve() for f in body.folders]
     bad = [str(f) for f in folders if not f.is_dir()]
     if not folders or bad:
-        raise HTTPException(400, f"not a folder: {bad}")
+        raise HTTPException(400, f"Can't find this folder: {', '.join(bad)}" if bad else "Type a folder path first.")
     if event_id in _running:
         raise HTTPException(409, "this event is already being organized")
     _running.add(event_id)

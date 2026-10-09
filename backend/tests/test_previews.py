@@ -24,6 +24,15 @@ def test_rotated_jpeg_renders_upright_and_reads_taken_at(tmp_path):
     assert taken_at == "2025-12-24T21:30:05"
 
 
+def test_taken_at_falls_back_to_ifd0_datetime(tmp_path):
+    """Camera RAW embedded previews (CR3) carry DateTime but no DateTimeOriginal."""
+    src = tmp_path / "IMG_3.jpg"
+    exif = Image.Exif()
+    exif[306] = "2026:09:09 15:02:48"
+    Image.new("RGB", (8, 8)).save(src, exif=exif)
+    assert previews.make_preview(src, tmp_path / "previews")[1] == "2026-09-09T15:02:48"
+
+
 def test_heic_and_downscale(tmp_path, monkeypatch):
     monkeypatch.setattr(previews.config, "PREVIEW_MAX_PX", 32)
     src = tmp_path / "IMG_2.HEIC"

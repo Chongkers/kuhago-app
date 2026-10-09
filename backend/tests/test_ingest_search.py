@@ -100,6 +100,8 @@ def test_ingest_two_folders_skips_bad_files_then_search(tmp_path):
     hits = client.get("/search", params={"q": "axis:2", "event_id": ev}).json()
     assert hits[0]["moment"] == "Group Photo" and hits[0]["score"] == pytest.approx(1.0)
     assert len(client.get("/search", params={"q": "axis:0"}).json()) == 3  # global search
+    assert client.get("/search", params={"q": "  ", "event_id": ev}).json() == []  # nothing typed, nothing matched
+    assert client.get("/events/999/media").status_code == 404
 
 
 def test_ingest_rejects_bad_input(tmp_path):

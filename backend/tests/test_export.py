@@ -110,6 +110,9 @@ def test_dry_run_then_copy(tmp_path):
     progress = _sse(client, res.json()["job_id"])
     assert progress[-1]["stage"] == "done"
     assert {"stage": "copying", "done": 6, "total": 6} in progress
+    assert [p["message"] for p in progress if p["stage"] == "error"] == [
+        "1 of 6 files could not be copied. The rest are in the folder."
+    ]
 
     assert (root / "Moments" / "Cake" / "IMG_0001.jpg").read_text() == "mom cake"
     assert (root / "Moments" / "Cake" / "IMG_0001_2.jpg").read_text() == "tito cake"
@@ -129,3 +132,6 @@ def test_export_rejects_bad_input(tmp_path):
     assert client.post(f"/events/{ev}/export", json={"dest": "", "dry_run": False}).status_code == 400
     _file(tmp_path / "a_file")
     assert client.post(f"/events/{ev}/export", json={"dest": str(tmp_path / "a_file"), "dry_run": False}).status_code == 400
+    typo = tmp_path / "no_such_parent" / "out"  # a mistyped path is refused, not silently created
+    assert client.post(f"/events/{ev}/export", json={"dest": str(typo), "dry_run": False}).status_code == 400
+    assert not typo.parent.exists()

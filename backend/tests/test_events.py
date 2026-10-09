@@ -31,6 +31,7 @@ def test_create_then_list(client):
 def test_create_rejects_bad_mode(client):
     assert client.post("/events", json={"mode": "boss", "name": "x", "event_type": "birthday"}).status_code == 422
     assert client.post("/events", json={"mode": "personal", "name": "x"}).status_code == 422  # event_type required
+    assert client.post("/events", json={"mode": "personal", "name": "  ", "event_type": "birthday"}).status_code == 422
 
 
 def test_patch_updates_only_given_fields(client):

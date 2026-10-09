@@ -130,7 +130,18 @@ type State = {
   error: string | null
 }
 
-let state: State = { events: [], finals: {}, sidecarMode: 'darktable', loaded: false, error: null }
+const SIDECAR_KEY = 'kuha.sidecarMode'
+
+function readSidecarMode(): SidecarMode {
+  try {
+    const value = localStorage.getItem(SIDECAR_KEY)
+    return value === 'lightroom' || value === 'rapidraw' ? value : 'darktable'
+  } catch {
+    return 'darktable'
+  }
+}
+
+let state: State = { events: [], finals: {}, sidecarMode: readSidecarMode(), loaded: false, error: null }
 const listeners = new Set<() => void>()
 
 function setState(next: Partial<State>) {
@@ -191,6 +202,11 @@ export function useSidecarMode(): SidecarMode {
 }
 
 export function setSidecarMode(sidecarMode: SidecarMode) {
+  try {
+    localStorage.setItem(SIDECAR_KEY, sidecarMode)
+  } catch {
+    // storage unavailable: the choice still applies for this session
+  }
   setState({ sidecarMode })
 }
 
@@ -235,8 +251,9 @@ export async function startIngest(eventId: number, folders: string[]): Promise<v
       )
     })
   } finally {
+    // reload first: clearing the progress early would flash the old, empty event
+    await reloadEvent(eventId).catch(() => undefined)
     patchEvent(eventId, { ingest: undefined })
-    await reloadEvent(eventId)
   }
 }
 

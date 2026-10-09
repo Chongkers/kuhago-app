@@ -26,5 +26,7 @@ def export(event_id: int, body: ExportIn):
         return plan
     dest = Path(body.dest.strip()).expanduser()
     if not body.dest.strip() or not dest.is_absolute() or (dest.exists() and not dest.is_dir()):
-        raise HTTPException(400, f"choose a full folder path, not {body.dest!r}")
+        raise HTTPException(400, "Type the full path of a folder, like D:\\Photos\\Family.")
+    if not dest.exists() and not dest.parent.is_dir():  # a new folder is fine, a mistyped drive or path is not
+        raise HTTPException(400, f"Can't find {dest.parent}. Check the folder path.")
     return {"job_id": jobs.start(execute_export, plan["copies"], dest)}

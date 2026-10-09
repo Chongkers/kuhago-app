@@ -43,7 +43,7 @@ function Highlights({ event }: { event: EventView }) {
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {event.highlights.map((h) => (
-          <div key={h.moment} className="relative">
+          <div key={h.thumb.id} className="relative">
             <Thumb thumb={h.thumb} className="aspect-[4/3] w-full rounded-lg" />
             <span className="absolute bottom-2 left-2 rounded bg-neutral-800/80 px-1.5 py-0.5 text-xs text-white">
               {h.moment}

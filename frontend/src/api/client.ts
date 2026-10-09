@@ -68,10 +68,21 @@ export type FinalsResult = {
   unedited_selects: number[]
 }
 
+function sentence(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, init)
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE}${path}`, init)
+  } catch {
+    throw new Error("Can't reach KuhaGo's engine. Check that it's running, then try again.")
+  }
   if (!res.ok) {
-    throw new Error(`${init?.method ?? 'GET'} ${path} failed: ${res.status} ${await res.text()}`)
+    // the engine's own sentence when it sent one; never the method, path or status code
+    const detail: unknown = await res.json().then((body) => body?.detail, () => undefined)
+    throw new Error(typeof detail === 'string' ? sentence(detail) : "That didn't work. Check what you typed and try again.")
   }
   return res.json() as Promise<T>
 }

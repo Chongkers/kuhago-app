@@ -83,6 +83,7 @@ Each moment is recognized by combining CLIP similarity to a visual description (
 | Video frames & audio | [FFmpeg](https://ffmpeg.org/) |
 | Duplicate detection & matching | [ImageHash](https://github.com/JohannesBuchner/imagehash) |
 | Metadata read/write | [ExifTool](https://exiftool.org/) |
+| "Ask the owl" chat (optional) | [Ollama](https://ollama.com/) on localhost — default `llama3.2:3b`, or any model you pull |
 | Backend | Python, FastAPI, SQLite, PyTorch |
 | Frontend | React, Vite, TypeScript, Tailwind CSS |
 | Development | AI-assisted development (Devin / coding agents) |
@@ -100,6 +101,7 @@ All AI inference runs locally. No cloud AI API is used.
   - **Windows:** `winget install Gyan.FFmpeg` and `winget install OliverBetz.ExifTool`
   - **macOS:** `brew install ffmpeg exiftool`
   - **Linux:** `sudo apt install ffmpeg libimage-exiftool-perl`
+- Optional, for **Ask the owl**: [Ollama](https://ollama.com/) running locally, then `ollama pull llama3.2:3b` (one-time download). Without it, everything else works.
 - Optional: NVIDIA GPU (CUDA) or Apple Silicon (MPS) for faster processing. CPU works.
 
 ### 1. Backend

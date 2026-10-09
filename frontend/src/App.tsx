@@ -6,6 +6,7 @@ import EventDetail from './pages/EventDetail'
 import Events from './pages/Events'
 import Export from './pages/Export'
 import Finals from './pages/Finals'
+import AskOwl from './pages/AskOwl'
 import Settings from './pages/Settings'
 import Owl from './pages/Owl'
 import Profiles from './pages/Profiles'
@@ -28,6 +29,7 @@ function AppRoutes() {
       <Route path="/events/:eventId" element={<EventDetail />} />
       <Route path="/events/:eventId/export" element={<Export />} />
       <Route path="/events/:eventId/finals" element={<Finals />} />
+      <Route path="/events/:eventId/owl" element={<AskOwl />} />
       <Route path="/search" element={<Search />} />
       <Route path="/owl" element={<Owl />} />
       <Route path="/settings" element={mode ? <Settings /> : <Navigate to="/" replace />} />

@@ -17,7 +17,9 @@ export default function OrganizeCard({ event }: { event: EventView }) {
 
   return (
     <form onSubmit={submit} className={`${card} p-5`}>
-      <h2 className="text-lg font-semibold">Add your photos and videos</h2>
+      <h2 className="text-lg font-semibold">
+        {event.photos + event.videos > 0 ? 'Add more photos' : 'Add your photos and videos'}
+      </h2>
       <p className="mt-1 text-sm text-neutral-600">
         Paste the folder everyone's photos are in. Several folders? Separate them with a semicolon.
       </p>

@@ -9,7 +9,7 @@ import { useAction } from '../lib/useAction'
 import CoverageCard from './CoverageCard'
 import OrganizeCard from './OrganizeCard'
 import OwlCard from './OwlChat'
-import { Notice, Owl, Thumb } from './ui'
+import { ImagePicker, Notice, Owl, Thumb } from './ui'
 import { Page } from './Shell'
 
 type Tab = 'moments' | 'highlights' | 'clips' | 'unsorted'
@@ -86,6 +86,8 @@ export default function PersonalEvent({ event }: { event: EventView }) {
   const search = useAction()
   const [results, setResults] = useState<ThumbData[] | null>(null)
   const examples = useAction()
+  const [exampleMoment, setExampleMoment] = useState('')
+  const moment = event.moments.find((m) => m.moment === exampleMoment) ?? event.moments[0]
   const empty = event.photos + event.videos === 0 || !!event.ingest
 
   const tabs: { id: Tab; label: string }[] = [
@@ -165,9 +167,7 @@ export default function PersonalEvent({ event }: { event: EventView }) {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="space-y-9">
-          {empty ? (
-            <OrganizeCard event={event} />
-          ) : (
+          {!empty && (
             <>
               {tab === 'moments' && <Moments event={event} />}
               {(tab === 'moments' || tab === 'highlights') && <Highlights event={event} />}
@@ -186,6 +186,7 @@ export default function PersonalEvent({ event }: { event: EventView }) {
               )}
             </>
           )}
+          <OrganizeCard event={event} />
         </div>
 
         <aside className="space-y-4">
@@ -195,9 +196,31 @@ export default function PersonalEvent({ event }: { event: EventView }) {
             <Owl className="h-8 w-8 shrink-0" />
             <div>
               <p className="text-sm">Teach KuhaGo what you mean — drop a few example photos into any moment.</p>
-              <button type="button" className={`${btnSecondary} mt-2`} onClick={() => examples.run(() => addExamples(event.id))}>
-                Add example photos
-              </button>
+              <select
+                value={moment?.moment ?? ''}
+                onChange={(e) => setExampleMoment(e.target.value)}
+                aria-label="Moment"
+                className={`${input} mt-2 py-2`}
+              >
+                {event.moments.map((m) => (
+                  <option key={m.moment}>{m.moment}</option>
+                ))}
+              </select>
+              {moment && moment.refs.length > 0 && (
+                <div className="mt-2 grid grid-cols-4 gap-1.5">
+                  {moment.refs.map((thumb) => (
+                    <Thumb key={thumb.id} thumb={thumb} className="aspect-square w-full rounded-md" />
+                  ))}
+                </div>
+              )}
+              {moment && (
+                <ImagePicker
+                  className={`${btnSecondary} mt-2`}
+                  onFiles={(files) => examples.run(() => addExamples(event.id, moment.shotItemId, files))}
+                >
+                  {term('refs', event.mode)}
+                </ImagePicker>
+              )}
               <Notice>{examples.error}</Notice>
             </div>
           </div>

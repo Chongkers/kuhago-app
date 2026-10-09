@@ -18,6 +18,10 @@ export type TermKey =
   | 'selects'
   | 'coverage'
   | 'export'
+  | 'overview'
+  | 'finals'
+  | 'settings'
+  | 'owl'
 
 const TERMS: Record<TermKey, Record<Mode, string>> = {
   event: { personal: 'Event', pro: 'Gig' },
@@ -34,6 +38,10 @@ const TERMS: Record<TermKey, Record<Mode, string>> = {
   selects: { personal: 'Favorites', pro: 'Selects' },
   coverage: { personal: 'Missed moments', pro: 'Coverage' },
   export: { personal: 'Export folders', pro: 'Archive' },
+  overview: { personal: 'Overview', pro: 'Overview' },
+  finals: { personal: 'Finals', pro: 'Finals' },
+  settings: { personal: 'Settings', pro: 'Settings' },
+  owl: { personal: 'Ask the owl', pro: 'Ask the owl' },
 }
 
 export function term(key: TermKey, mode: Mode): string {

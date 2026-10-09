@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import jobs
-from app.routes import coverage, events, export, finals, ingest, media, search, shot_items, xmp
+from app.routes import coverage, events, export, finals, ingest, media, owl, search, shot_items, xmp
 from ml import clip_engine, vad
 
 
@@ -31,4 +31,5 @@ app.include_router(search.router)
 app.include_router(shot_items.router)
 app.include_router(finals.router)
 app.include_router(xmp.router)
+app.include_router(owl.router)
 app.include_router(jobs.router)

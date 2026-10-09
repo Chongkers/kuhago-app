@@ -29,6 +29,7 @@ export type ShotItem = {
   moment: string
   prompt: string[]  // CLIP prompts
   required: boolean
+  refs: number[]  // example photo ids, served by refImageUrl
 }
 
 export type Media = {
@@ -67,6 +68,9 @@ export type FinalsResult = {
   unmatched_finals: string[]
   unedited_selects: number[]
 }
+
+export type ChatMessage = { role: 'user' | 'assistant'; content: string }
+export type OwlStatus = { connected: boolean; models: string[]; default_model: string; url: string }
 
 function sentence(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1)
@@ -115,6 +119,7 @@ export const api = {
     for (const file of files) form.append('files', file)
     return request<{ added: number }>(`/shot_items/${shotItemId}/refs`, { method: 'POST', body: form })
   },
+  refImageUrl: (refId: number) => `${API_BASE}/refs/${refId}/image`,
 
   startIngest: (eventId: number, folders: string[]) =>
     request<{ job_id: string }>(`/events/${eventId}/ingest`, json('POST', { folders })),
@@ -130,9 +135,14 @@ export const api = {
   startExport: (eventId: number, dest: string) =>
     request<{ job_id: string }>(`/events/${eventId}/export`, json('POST', { dest, dry_run: false })),
 
+  owlStatus: () => request<OwlStatus>('/owl/status'),
+  ask: (eventId: number, messages: ChatMessage[], model?: string) =>
+    request<{ reply: string }>(`/events/${eventId}/ask`, json('POST', { messages, model })),
+
   // Pro only
   matchFinals: (eventId: number, folder: string) =>
     request<{ job_id: string }>(`/events/${eventId}/finals`, json('POST', { folder })),
+  getFinals: (eventId: number) => request<FinalsResult>(`/events/${eventId}/finals`),
   writeXmp: (eventId: number, mode: SidecarMode) =>
     request<{ written: number }>(`/events/${eventId}/xmp`, json('POST', { mode })),
 }

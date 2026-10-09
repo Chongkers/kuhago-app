@@ -49,6 +49,34 @@ export function Thumb({ thumb, className = '' }: { thumb?: ThumbData; className?
   return <div className={`${TONES[(thumb?.tone ?? 0) % TONES.length]} ${className}`} />
 }
 
+// A button-looking label around a hidden image file input; the input keeps keyboard focus.
+export function ImagePicker({
+  className = '',
+  onFiles,
+  children,
+}: {
+  className?: string
+  onFiles: (files: File[]) => void
+  children: ReactNode
+}) {
+  return (
+    <label className={`cursor-pointer focus-within:ring-2 focus-within:ring-neutral-950 ${className}`}>
+      {children}
+      <input
+        type="file"
+        accept="image/*"
+        multiple
+        className="sr-only"
+        onChange={(e) => {
+          const files = [...(e.target.files ?? [])]
+          e.target.value = '' // picking the same files again still fires
+          if (files.length > 0) onFiles(files)
+        }}
+      />
+    </label>
+  )
+}
+
 export function ProgressBar({ done, total }: { done: number; total: number }) {
   const pct = total > 0 ? Math.min(100, (done / total) * 100) : 0
   return (

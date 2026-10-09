@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app import config, jobs
 from app.routes import coverage, dialog, events, export, finals, ingest, media, owl, search, shot_items, xmp
@@ -41,3 +43,8 @@ app.include_router(xmp.router)
 app.include_router(owl.router)
 app.include_router(dialog.router)
 app.include_router(jobs.router)
+
+# The built UI (npm run build), so one server is the whole app. Mounted last: API routes win.
+UI = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+if UI.is_dir():
+    app.mount("/", StaticFiles(directory=UI, html=True), name="ui")

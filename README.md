@@ -108,7 +108,7 @@ All AI inference runs locally. No cloud AI API is used.
 - Optional: NVIDIA GPU (CUDA) or Apple Silicon (MPS) for faster processing. CPU works.
 
 ### Windows: one click
-Run `run.bat` from the repo root. The first run creates the Python environment, installs packages, downloads the CLIP model, and runs `npm install`. Every run then starts Ollama (if installed), the backend, and the UI, and opens http://127.0.0.1:5173. On macOS/Linux, or to do it by hand, follow steps 1–2.
+Double-click `run.bat` in the repo root. The first run creates the Python environment, installs packages, downloads the CLIP model, builds the UI, and puts a **KuhaGo** shortcut on your Desktop. After that, just double-click the shortcut: it starts Ollama (if installed) and KuhaGo in one window and opens http://127.0.0.1:8000. Close that window to stop KuhaGo. On macOS/Linux, or to do it by hand, follow steps 1–2.
 
 ### 1. Backend
 ```bash
@@ -124,7 +124,8 @@ uvicorn app.main:app --port 8000
 ```bash
 cd frontend
 npm install
-npm run dev                           # opens http://localhost:5173
+npm run build                         # the backend then serves the app at http://127.0.0.1:8000
+# or, while changing the UI: npm run dev   (http://127.0.0.1:5173, live reload)
 ```
 
 ### 3. Try it

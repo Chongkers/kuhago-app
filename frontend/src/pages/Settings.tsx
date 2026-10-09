@@ -124,9 +124,9 @@ export default function Settings() {
 
       <nav aria-label="Settings sections" className="mt-5 flex flex-wrap gap-2">
         {SECTIONS.filter((s) => !s.pro || pro).map((s) => (
-          <a key={s.id} href={`#${s.id}`} className="rounded-full border border-neutral-400 px-3 py-1 text-sm hover:border-neutral-950">
+          <button key={s.id} type="button" onClick={() => document.getElementById(s.id)?.scrollIntoView({ behavior: 'smooth' })} className="rounded-full border border-neutral-400 px-3 py-1 text-sm hover:border-neutral-950">
             {s.label}
-          </a>
+          </button>
         ))}
       </nav>
 

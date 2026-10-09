@@ -1,5 +1,6 @@
-# Starts everything Kuha needs in one go: Ollama (optional), the engine on :8000 and the UI on :5173.
-# Safe to re-run: anything already listening is left alone. First run also installs what is missing.
+# Starts KuhaGo in one window: Ollama (optional), then the engine on :8000, which also serves the built UI.
+# Closing this window stops KuhaGo. Safe to re-run: if it is already up, this just opens the browser.
+# First run also installs what is missing and puts a KuhaGo shortcut on the Desktop.
 #   .\run.bat        (or: powershell -ExecutionPolicy Bypass -File run.ps1)
 $ErrorActionPreference = 'Stop'
 $backend = Join-Path $PSScriptRoot 'backend'
@@ -15,10 +16,6 @@ function Listening($port) {
 
 function Check($what) {
     if ($LASTEXITCODE -ne 0) { throw "$what failed (exit code $LASTEXITCODE)." }
-}
-
-function Window($title, $dir, $command) {
-    Start-Process powershell -WorkingDirectory $dir -ArgumentList '-NoExit', '-Command', "`$host.UI.RawUI.WindowTitle = '$title'; $command"
 }
 
 # --- first-run setup ---
@@ -57,31 +54,46 @@ elseif (Get-Command ollama -ErrorAction SilentlyContinue) {
 }
 else { Write-Warning 'Ollama is not installed: Ask KuhaGo will be unavailable, everything else works.' }
 
-# --- engine + UI, each in its own window (close the window or press Ctrl+C there to stop it) ---
-if (Listening 8000) { Write-Host 'Engine: already running on :8000' }
-else {
-    Window 'Kuha engine' $backend "& '$py' -m uvicorn app.main:app --port 8000"
-    Write-Host 'Engine: starting on :8000'
-}
-# The UI is pinned to 127.0.0.1: another project's dev server on localhost ([::1]:5173) would otherwise
-# be mistaken for Kuha, and "localhost" in the browser would open that project instead.
-if (Get-NetTCPConnection -State Listen -LocalAddress 127.0.0.1 -LocalPort 5173 -ErrorAction SilentlyContinue) {
-    Write-Host 'UI: already running on 127.0.0.1:5173'
-}
-else {
-    Window 'Kuha UI' $frontend 'npm run dev -- --host 127.0.0.1'
-    Write-Host 'UI: starting on 127.0.0.1:5173'
+# --- UI build: redone whenever the UI source is newer than the last build (e.g. after a git pull) ---
+$built = Join-Path $frontend 'dist\index.html'
+$newest = Get-ChildItem (Join-Path $frontend 'src'), (Join-Path $frontend 'public'), (Join-Path $frontend 'index.html') -Recurse -File |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+if (-not (Test-Path $built) -or $newest.LastWriteTime -gt (Get-Item $built).LastWriteTime) {
+    Write-Host 'Building the UI...'
+    Push-Location $frontend
+    npm run build
+    Pop-Location
+    Check 'Building the UI'
 }
 
-# the engine loads CLIP before it answers; that takes a while on CPU
-Write-Host 'Waiting for the engine...' -NoNewline
-$ready = $false
-foreach ($i in 1..90) {
-    try { Invoke-WebRequest 'http://127.0.0.1:8000/events' -UseBasicParsing -TimeoutSec 2 | Out-Null; $ready = $true; break }
-    catch { Write-Host '.' -NoNewline; Start-Sleep -Seconds 2 }
+# --- Desktop shortcut (first run; delete it and it comes back next run) ---
+$lnk = Join-Path ([Environment]::GetFolderPath('Desktop')) 'KuhaGo.lnk'
+if (-not (Test-Path $lnk)) {
+    $s = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk)
+    $s.TargetPath = Join-Path $PSScriptRoot 'run.bat'
+    $s.WorkingDirectory = $PSScriptRoot
+    $s.IconLocation = Join-Path $PSScriptRoot 'kuhago.ico'
+    $s.Save()
+    Write-Host 'Added a KuhaGo shortcut to your Desktop.'
 }
-Write-Host ''
-if (-not $ready) { throw 'The engine did not come up. Look at the "Kuha engine" window for the error.' }
 
-Start-Process 'http://127.0.0.1:5173'
-Write-Host 'Kuha is running: http://127.0.0.1:5173'
+$url = 'http://127.0.0.1:8000'
+if (Listening 8000) {
+    Write-Host "KuhaGo is already running: $url"
+    Start-Process $url
+    exit
+}
+
+# the engine loads CLIP before it answers (slow on CPU), so open the browser from the side once it does
+Start-Job -ArgumentList $url {
+    param($url)
+    foreach ($i in 1..90) {
+        try { Invoke-WebRequest "$url/events" -UseBasicParsing -TimeoutSec 2 | Out-Null; Start-Process $url; break }
+        catch { Start-Sleep -Seconds 2 }
+    }
+} | Out-Null
+
+$host.UI.RawUI.WindowTitle = 'KuhaGo'
+Write-Host "Starting KuhaGo at $url (the browser opens when it is ready). Close this window to stop KuhaGo."
+Set-Location $backend
+& $py -m uvicorn app.main:app --port 8000

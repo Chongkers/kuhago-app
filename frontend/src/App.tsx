@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { useStatus } from './api/data'
 import { ModeProvider, useMode } from './lib/mode'
 import { ProfileProvider, useProfiles } from './lib/profile'
@@ -41,9 +41,10 @@ export default function App() {
   return (
     <ProfileProvider>
       <ModeProvider>
-        <BrowserRouter>
+        {/* Hash routes: page paths like /events/3 are also API paths on the same server. */}
+        <HashRouter>
           <AppRoutes />
-        </BrowserRouter>
+        </HashRouter>
       </ModeProvider>
     </ProfileProvider>
   )

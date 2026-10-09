@@ -1,10 +1,12 @@
 """SQLite schema (AGENTS.md §5) + per-event emb.npy helpers. emb_index = row in that event's emb.npy."""
+import json
 import sqlite3
 import threading
 
 import numpy as np
 
 from app import config
+from ml.classifier import ShotItem
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS events(
@@ -84,3 +86,18 @@ def append_embeddings(event_id: int, emb: np.ndarray) -> list[int]:
             np.save(f, np.vstack([old, emb.astype(np.float32)]))
         tmp.replace(p)  # atomic: a crash mid-write never corrupts existing embeddings
         return list(range(len(old), len(old) + len(emb)))
+
+
+def load_shot_items(con: sqlite3.Connection, event_id: int, all_emb: np.ndarray) -> list[ShotItem]:
+    """The event's shot items with their example-photo rows (which share the event's emb.npy with media)."""
+    shots = con.execute("SELECT id, moment, prompt FROM shot_items WHERE event_id = ? ORDER BY id", (event_id,)).fetchall()
+    refs = con.execute(
+        "SELECT r.shot_item_id, r.emb_index FROM refs r JOIN shot_items s ON s.id = r.shot_item_id"
+        " WHERE s.event_id = ? AND r.emb_index IS NOT NULL",
+        (event_id,),
+    ).fetchall()
+    items = []
+    for s in shots:
+        rows = [r["emb_index"] for r in refs if r["shot_item_id"] == s["id"]]
+        items.append(ShotItem(s["moment"], json.loads(s["prompt"]), all_emb[rows] if rows else None))
+    return items

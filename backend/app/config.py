@@ -30,12 +30,14 @@ COVERAGE_CANDIDATES = 3
 
 # Previews
 PREVIEW_MAX_PX = 1024
+PREVIEW_JPEG_QUALITY = 85
 
 # Search
 SEARCH_K = 24
 
 # Ingest
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp"}
+VIDEO_EXTS = {".mp4", ".mov"}
 
 
 def pick_device() -> str:

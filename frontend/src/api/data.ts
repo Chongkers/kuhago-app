@@ -4,18 +4,21 @@
 
 import { useSyncExternalStore } from 'react'
 import { basename, finalsView, type FinalsView, type Thumb } from '../lib/finals'
-import { useProfiles } from '../lib/profile'
+import { useProfiles, type ReplyLanguage } from '../lib/profile'
 import type { Mode } from '../lib/terms'
-import { api, watchJob, type ChatMessage, type EventStatus, type ExportPlan, type KuhaEvent, type Media, type MomentIdea } from './client'
+import { api, watchJob, type ChatMessage, type EventStatus, type ExportPlan, type Health, type KuhaEvent, type Media, type MomentIdea } from './client'
 
-export type { FinalsView, MomentIdea, Thumb }
+export type { FinalsView, Health, MomentIdea, Thumb }
 
 export type SidecarMode = 'lightroom' | 'darktable' | 'rapidraw'
 
 export type MomentView = {
   shotItemId: number
   moment: string
+  // photos + videos sorted into it
   count: number
+  photos: number
+  videos: number
   // a must-have: the only kind the missed-moment check reports
   required: boolean
   // false = the missed-moment check found nothing for it
@@ -25,10 +28,12 @@ export type MomentView = {
   // every photo and video sorted into it; pages show the first few and open the rest on request
   thumbs: Thumb[]
   refs: Thumb[]
+  // for a missed moment: the closest photos KuhaGo found, to ask "is it one of these?"
+  candidates: Thumb[]
 }
 
-export type Clip = { file: string; moment: string; duration: string }
-export type Roll = { count: number; items: Clip[] }
+// Where an Organize job is. stage is the engine's name for the step; jobId is what Stop cancels.
+export type IngestProgress = { done: number; total: number; folders: string[]; stage: string; jobId: string }
 
 export type EventView = {
   id: number
@@ -41,25 +46,31 @@ export type EventView = {
   videos: number
   // number of phones / cards the media came from
   sources?: number
+  // everything in the event as it is now, in the order it was taken
+  media: Thumb[]
   moments: MomentView[]
   unsorted: number
   unsortedThumbs: Thumb[]
   highlights: { moment: string; thumb: Thumb }[]
   highlightCount: number
-  clips: { A: Roll; B: Roll }
+  // marked by hand: Favorites in Events, Selects in the Tracker
+  favorites: Thumb[]
+  clips: { A: Thumb[]; B: Thumb[] }
   // Pro only
   venue?: string
   client?: string
   fee?: number
   paid?: boolean
   status?: EventStatus
-  ingest?: { done: number; total: number; folders: string[] }
+  ingest?: IngestProgress
   xmpWritten?: boolean
 }
 
 export const STATUSES: EventStatus[] = ['inquiry', 'booked', 'shot', 'editing', 'delivered']
 
-const UNSORTED = 'Unsorted'
+export const UNSORTED = 'Unsorted'
+// prefix of an example photo's thumb id, so it never collides with a media id
+const REF = 'ref-'
 
 // Missed = a must-have with nothing found. Optional moments are never reported as missed.
 export function missedMoments(event: EventView): MomentView[] {
@@ -82,14 +93,17 @@ function thumb(m: Media): Thumb {
     tone: m.id,
     full: `${api.previewUrl(m.id)}?v=${version}`,
     name: basename(m.path),
+    path: m.path,
+    video: m.kind === 'video' ? `${api.videoUrl(m.id)}?v=${version}` : undefined,
+    moment: m.moment,
+    placed: m.moment_locked,
+    favorite: m.is_select,
   }
 }
 
-function roll(media: Media[], r: 'A' | 'B'): Roll {
-  const items = media
-    .filter((m) => m.kind === 'video' && m.roll === r)
-    .map((m) => ({ file: basename(m.path), moment: m.moment, duration: '' }))
-  return { count: items.length, items }
+// How many of these are videos; the rest are photos.
+export function videosIn(thumbs: Thumb[]): number {
+  return thumbs.filter((t) => t.video).length
 }
 
 async function loadEvent(e: KuhaEvent): Promise<EventView> {
@@ -98,23 +112,28 @@ async function loadEvent(e: KuhaEvent): Promise<EventView> {
     api.listMedia(e.id),
     api.coverage(e.id),
   ])
+  const byId = new Map(media.map((m) => [m.id, m]))
   const byMoment = new Map<string, Media[]>()
   for (const m of media) byMoment.set(m.moment, [...(byMoment.get(m.moment) ?? []), m])
   const pro = e.mode === 'pro'
   const moments = items.map((item): MomentView => {
     const cov = coverage.find((c) => c.moment === item.moment)
     const found = byMoment.get(item.moment) ?? []
+    const videos = found.filter((m) => m.kind === 'video').length
     return {
       shotItemId: item.id,
       moment: item.moment,
       count: found.length,
+      photos: found.length - videos,
+      videos,
       required: item.required,
       covered: cov?.covered ?? found.length > 0,
       bestScore: cov?.best_score,
       // the raw score is jargon, so only Pro sees it
       hint: pro && cov && !cov.covered && media.length > 0 ? `Closest match: ${cov.best_score.toFixed(2)}` : undefined,
       thumbs: found.map(thumb),
-      refs: item.refs.map((id) => ({ id: `ref-${id}`, src: api.refImageUrl(id), tone: id })),
+      refs: item.refs.map((id) => ({ id: `${REF}${id}`, src: api.refImageUrl(id), tone: id })),
+      candidates: item.required && cov && !cov.covered ? cov.candidates.flatMap((id) => byId.get(id) ?? []).map(thumb) : [],
     }
   })
   const unsorted = byMoment.get(UNSORTED) ?? []
@@ -127,12 +146,17 @@ async function loadEvent(e: KuhaEvent): Promise<EventView> {
     date: e.date ?? '',
     photos: media.filter((m) => m.kind === 'photo').length,
     videos: media.filter((m) => m.kind === 'video').length,
+    media: media.map(thumb),
     moments,
     unsorted: unsorted.length,
     unsortedThumbs: unsorted.map(thumb),
     highlights,
     highlightCount: highlights.length,
-    clips: { A: roll(media, 'A'), B: roll(media, 'B') },
+    favorites: media.filter((m) => m.is_select).map(thumb),
+    clips: {
+      A: media.filter((m) => m.kind === 'video' && m.roll === 'A').map(thumb),
+      B: media.filter((m) => m.kind === 'video' && m.roll !== 'A').map(thumb),
+    },
     venue: e.venue ?? undefined,
     client: e.client ?? undefined,
     fee: e.fee ?? undefined,
@@ -145,6 +169,8 @@ type State = {
   events: EventView[]
   finals: Record<number, FinalsView | undefined>
   sidecarMode: SidecarMode
+  // null: not asked yet, or an engine too old to say
+  health: Health | null
   loaded: boolean
   error: string | null
 }
@@ -160,7 +186,7 @@ function readSidecarMode(): SidecarMode {
   }
 }
 
-let state: State = { events: [], finals: {}, sidecarMode: readSidecarMode(), loaded: false, error: null }
+let state: State = { events: [], finals: {}, sidecarMode: readSidecarMode(), health: null, loaded: false, error: null }
 const listeners = new Set<() => void>()
 
 function setState(next: Partial<State>) {
@@ -183,10 +209,12 @@ function useStore(): State {
 
 const OFFLINE = "Can't reach KuhaGo's engine. Start it (backend on port 8000), then reload this page."
 
-async function loadAll() {
+// Also the "Try again" of the engine-not-running screen.
+export async function loadAll() {
   try {
-    const events = await Promise.all((await api.listEvents()).map(loadEvent))
-    setState({ events: events.reverse(), loaded: true, error: null })
+    const [health, list] = await Promise.all([api.health().catch(() => null), api.listEvents()])
+    const events = await Promise.all(list.map(loadEvent))
+    setState({ events: events.reverse(), health, loaded: true, error: null })
   } catch {
     setState({ loaded: true, error: OFFLINE })
   }
@@ -199,9 +227,9 @@ async function reloadEvent(id: number) {
 
 void loadAll()
 
-export function useStatus(): { loaded: boolean; error: string | null } {
-  const { loaded, error } = useStore()
-  return { loaded, error }
+export function useStatus(): { loaded: boolean; error: string | null; health: Health | null } {
+  const { loaded, error, health } = useStore()
+  return { loaded, error, health }
 }
 
 // Each profile only sees the events it created (see ownsEvent in lib/profile).
@@ -272,6 +300,14 @@ export async function updateDetails(event: EventView, details: EventDetails): Pr
   await reloadEvent(event.id)
 }
 
+// Forgets the event (and the gig it may be) in KuhaGo. Original files and exported folders are never touched.
+export async function deleteEvent(eventId: number): Promise<void> {
+  await api.deleteEvent(eventId)
+  const finals = { ...state.finals }
+  delete finals[eventId]
+  setState({ events: state.events.filter((e) => e.id !== eventId), finals })
+}
+
 // Starts tracking an event that is already in Events as a gig. Its photos and list stay as they are.
 export async function trackEvent(eventId: number, gig: { client?: string; venue?: string; fee?: number }): Promise<void> {
   await api.updateEvent(eventId, {
@@ -339,32 +375,52 @@ export function setStatus(id: number, status: EventStatus) {
   api.updateEvent(id, { status }).catch(() => reloadEvent(id))
 }
 
-// Resolves when a background job ends; doing names the work in failure messages ("Organizing").
-function waitForJob(jobId: string, doing: string, onProgress?: (done: number, total: number) => void): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
+type JobEnd = { notes: string[]; cancelled: boolean }
+
+// Resolves when a background job ends, with what it said about files it left out and whether the user stopped
+// it; doing names the work in failure messages ("Organizing").
+function waitForJob(
+  jobId: string,
+  doing: string,
+  onProgress?: (done: number, total: number, stage: string) => void,
+): Promise<JobEnd> {
+  return new Promise<JobEnd>((resolve, reject) => {
+    const end: JobEnd = { notes: [], cancelled: false }
     watchJob(
       jobId,
       (p) => {
         if (p.stage === 'error') reject(new Error(`${doing} stopped: ${p.message ?? 'unknown error'}`))
-        else if (p.stage !== 'done') onProgress?.(p.done, p.total)
+        else if (p.stage === 'warning') end.notes.push(p.message ?? '')
+        else if (p.stage === 'cancelled') end.cancelled = true
+        else if (p.stage !== 'done') onProgress?.(p.done, p.total, p.stage)
       },
-      resolve,
+      () => resolve(end),
       () => reject(new Error(`Lost touch with the engine while ${doing.toLowerCase()}.`)),
     )
   })
 }
 
-// Organize one or more folders; progress lands on event.ingest until the job ends.
-export async function startIngest(eventId: number, folders: string[]): Promise<void> {
-  const { job_id } = await api.startIngest(eventId, folders)
-  patchEvent(eventId, { ingest: { done: 0, total: 0, folders } })
+// Organize one or more folders; progress lands on event.ingest until the job ends. Resolves with what to tell
+// the user afterwards: files that were left out, or that it was stopped.
+export async function startIngest(eventId: number, folders: string[]): Promise<string[]> {
+  const { job_id: jobId } = await api.startIngest(eventId, folders)
+  patchEvent(eventId, { ingest: { done: 0, total: 0, folders, stage: '', jobId } })
   try {
-    await waitForJob(job_id, 'Organizing', (done, total) => patchEvent(eventId, { ingest: { done, total, folders } }))
+    const end = await waitForJob(jobId, 'Organizing', (done, total, stage) =>
+      patchEvent(eventId, { ingest: { done, total, folders, stage, jobId } }),
+    )
+    return end.cancelled ? ['Stopped. Nothing from this folder was added.'] : end.notes
   } finally {
     // reload first: clearing the progress early would flash the old, empty event
     await reloadEvent(eventId).catch(() => undefined)
     patchEvent(eventId, { ingest: undefined })
   }
+}
+
+// Asks the running Organize to stop. It ends on its own a moment later, and startIngest resolves.
+export async function stopIngest(eventId: number): Promise<void> {
+  const jobId = state.events.find((e) => e.id === eventId)?.ingest?.jobId
+  if (jobId) await api.cancelJob(jobId)
 }
 
 export async function searchMedia(eventId: number | undefined, query: string): Promise<Thumb[]> {
@@ -377,8 +433,26 @@ export async function removeMedia(eventId: number, thumbId: string): Promise<voi
   await reloadEvent(eventId)
 }
 
+// Puts one photo or video where the user says it belongs; it stays there however the list changes.
+// moment null hands it back to KuhaGo to sort.
+export async function moveMedia(eventId: number, thumbId: string, moment: string | null): Promise<void> {
+  await api.updateMedia(Number(thumbId), { moment })
+  await reloadEvent(eventId)
+}
+
+export async function setFavorite(eventId: number, thumbId: string, favorite: boolean): Promise<void> {
+  await api.updateMedia(Number(thumbId), { is_select: favorite })
+  await reloadEvent(eventId)
+}
+
 export async function addExamples(eventId: number, shotItemId: number, files: File[]): Promise<void> {
   await api.addRefs(shotItemId, files)
+  await reloadEvent(eventId)
+}
+
+// Takes one example photo (a MomentView ref) off its moment; the event is sorted again without it.
+export async function removeExample(eventId: number, ref: Thumb): Promise<void> {
+  await api.deleteRef(Number(ref.id.slice(REF.length)))
   await reloadEvent(eventId)
 }
 
@@ -404,11 +478,16 @@ export async function scanFinals(eventId: number, folder: string): Promise<void>
 export type OwlReply = { reply: string; moments: string[]; photos: Thumb[] }
 
 // One answer about an event from Ollama on this laptop. messages is the whole conversation so far.
-export async function askOwl(eventId: number | undefined, messages: ChatMessage[], preferred: string): Promise<OwlReply> {
+export async function askOwl(
+  eventId: number | undefined,
+  messages: ChatMessage[],
+  preferred: string,
+  language: ReplyLanguage,
+): Promise<OwlReply> {
   if (eventId === undefined) throw new Error('Create an event first, then ask about it.')
   // no installed model: the engine's default is asked for, and its reply says how to get it
   const model = (await owlModel(preferred)) ?? undefined
-  const { reply, moments, photos } = await api.ask(eventId, messages, model)
+  const { reply, moments, photos } = await api.ask(eventId, messages, model, language)
   return { reply, moments, photos: photos.map(thumb) }
 }
 

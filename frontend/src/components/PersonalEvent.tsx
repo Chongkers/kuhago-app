@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { addExamples, removeMedia, searchMedia, type EventView, type Thumb as ThumbData } from '../api/data'
-import { count, formatDate } from '../lib/format'
+import { addExamples, removeExample, searchMedia, useStatus, videosIn, type EventView, type Thumb as ThumbData } from '../api/data'
+import { count, formatDate, mediaCount } from '../lib/format'
 import { backLink, btnPrimary, btnSecondary, card, input, panel } from '../lib/styles'
 import { templateLabel } from '../lib/templates'
 import { useMode } from '../lib/mode'
@@ -9,42 +9,27 @@ import { rollLabel, term } from '../lib/terms'
 import { useAction } from '../lib/useAction'
 import CoverageCard from './CoverageCard'
 import { EditEventModal } from './EventForm'
+import { Tile, useEventViewer, type OpenViewer } from './EventViewer'
 import FirstSteps from './FirstSteps'
 import OrganizeCard from './OrganizeCard'
 import OwlCard from './OwlChat'
-import PhotoViewer from './PhotoViewer'
-import { ImagePicker, Modal, Notice, Owl, Thumb } from './ui'
+import { ImagePicker, Modal, Notice, Owl, RemovableThumb } from './ui'
 import { Page } from './Shell'
 
-type Tab = 'moments' | 'highlights' | 'clips' | 'unsorted'
-// opens the photo viewer on one photo of a grid
-type Open = (thumbs: ThumbData[], index: number) => void
-
-// A grid photo that opens large when clicked.
-function Tile({ thumbs, index, open, className }: { thumbs: ThumbData[]; index: number; open: Open; className: string }) {
-  return (
-    <button
-      type="button"
-      onClick={() => open(thumbs, index)}
-      aria-label={`View ${thumbs[index].name ?? 'photo'}`}
-      className="block w-full cursor-zoom-in overflow-hidden rounded-lg hover:opacity-80"
-    >
-      <Thumb thumb={thumbs[index]} className={className} />
-    </button>
-  )
-}
+type Tab = 'moments' | 'highlights' | 'favorites' | 'clips' | 'unsorted'
 
 // how many photos of a moment the page shows before "View all"
 const ROW = 6
 
-function Moments({ event, open, onViewAll }: { event: EventView; open: Open; onViewAll: (moment: string) => void }) {
+function Moments({ event, open, onViewAll }: { event: EventView; open: OpenViewer; onViewAll: (moment: string) => void }) {
   // everything was added but nothing fit the list: say what to do instead of showing an empty tab
   if (event.moments.every((m) => m.count === 0)) {
+    const videos = videosIn(event.unsortedThumbs)
     return (
       <section className="rounded-2xl border-2 border-neutral-950 p-5" role="status">
         <h2 className="text-xl font-bold">Nothing is sorted yet</h2>
         <p className="mt-1 text-sm">
-          All {count(event.unsorted, 'photo')} went to Unsorted because{' '}
+          All {mediaCount(event.unsorted - videos, videos, ' and ')} went to Unsorted because{' '}
           {event.moments.length === 0 ? 'your list is empty' : 'none of them fit what is on your list'}. Add the themes
           and subjects these photos show in the <strong>{term('checklistTitle', event.mode)}</strong> section: click{' '}
           <strong>Edit list</strong> there, and KuhaGo sorts them again right away.
@@ -65,7 +50,7 @@ function Moments({ event, open, onViewAll }: { event: EventView; open: Open; onV
                   View all {m.count}
                 </button>
               ) : (
-                <span className="text-xs text-neutral-600">{count(m.count, 'photo')}</span>
+                <span className="text-xs text-neutral-600">{mediaCount(m.photos, m.videos)}</span>
               )}
             </div>
             <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
@@ -79,13 +64,16 @@ function Moments({ event, open, onViewAll }: { event: EventView; open: Open; onV
   )
 }
 
-function Highlights({ event, open }: { event: EventView; open: Open }) {
+function Highlights({ event, open }: { event: EventView; open: OpenViewer }) {
+  const { health } = useStatus()
   const thumbs = event.highlights.map((h) => h.thumb)
   return (
     <section>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-xl font-bold">Highlights</h2>
-        <span className="text-xs text-neutral-600">Best 5 per moment · blurry and repeat shots hidden</span>
+        <span className="text-xs text-neutral-600">
+          {health ? `Best ${health.highlights_per_moment}` : 'The best few'} per moment · blurry and repeat shots hidden
+        </span>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {event.highlights.map((h, i) => (
@@ -101,24 +89,55 @@ function Highlights({ event, open }: { event: EventView; open: Open }) {
   )
 }
 
+function Favorites({ event, open }: { event: EventView; open: OpenViewer }) {
+  const name = term('select', event.mode)
+  return (
+    <section>
+      <h2 className="text-xl font-bold">{term('selects', event.mode)}</h2>
+      {event.favorites.length === 0 ? (
+        <p className="mt-2 text-sm text-neutral-600">
+          None yet. Open any photo or video and press ☆ {name} to keep it here. {term('selects', event.mode)} get their own
+          folder when you export.
+        </p>
+      ) : (
+        <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
+          {event.favorites.map((thumb, i) => (
+            <Tile key={thumb.id} thumbs={event.favorites} index={i} open={open} className="aspect-square w-full" />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
 const CLIP_BLURB = { A: 'Messages, speeches, greetings', B: 'The venue, the table, the dancing' }
 
-function Clips({ event }: { event: EventView }) {
+function Clips({ event, open }: { event: EventView; open: OpenViewer }) {
   return (
     <section>
       <h2 className="text-xl font-bold">{term('clips', event.mode)}</h2>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        {(['A', 'B'] as const).map((roll) => (
-          <div key={roll} className={`${card} flex items-center gap-3 p-3 shadow-none`}>
-            <div className="grid h-14 w-20 shrink-0 place-items-center rounded-lg bg-neutral-300 text-neutral-700">▶</div>
-            <div>
-              <p className="font-display font-semibold">
-                {rollLabel(roll, event.mode)} · {event.clips[roll].count}
-              </p>
-              <p className="text-xs text-neutral-600">{CLIP_BLURB[roll]}</p>
+      {event.videos === 0 && <p className="mt-2 text-sm text-neutral-600">There are no videos in this event yet.</p>}
+      <div className="mt-3 space-y-6">
+        {(['A', 'B'] as const)
+          .filter((roll) => event.clips[roll].length > 0)
+          .map((roll) => (
+            <div key={roll}>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="font-semibold">
+                  {rollLabel(roll, event.mode)} · {event.clips[roll].length}
+                </h3>
+                <span className="text-xs text-neutral-600">{CLIP_BLURB[roll]}</span>
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {event.clips[roll].map((clip, i) => (
+                  <div key={clip.id} className="min-w-0">
+                    <Tile thumbs={event.clips[roll]} index={i} open={open} className="aspect-video w-full" />
+                    <p className="mt-1 truncate text-xs text-neutral-600">{clip.name}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
       </div>
     </section>
   )
@@ -136,25 +155,18 @@ export default function PersonalEvent({ event, tracked = false }: { event: Event
   const [exampleMoment, setExampleMoment] = useState('')
   const moment = event.moments.find((m) => m.moment === exampleMoment) ?? event.moments[0]
   const empty = event.photos + event.videos === 0 || !!event.ingest
-  const [viewing, setViewing] = useState<{ thumbs: ThumbData[]; index: number } | null>(null)
-  const open: Open = (thumbs, index) => setViewing({ thumbs, index })
+  const viewer = useEventViewer(event)
   // the moment whose photos are all on show in a window
   const [allOf, setAllOf] = useState<string | null>(null)
   const all = event.moments.find((m) => m.moment === allOf && m.count > 0)
-
-  // the viewer moves on to the next photo of the grid it was opened from, and closes after the last one
-  async function remove(thumb: ThumbData) {
-    await removeMedia(event.id, thumb.id)
-    setResults((list) => list?.filter((t) => t.id !== thumb.id) ?? null)
-    setViewing((v) => {
-      const thumbs = v?.thumbs.filter((t) => t.id !== thumb.id) ?? []
-      return v && thumbs.length > 0 ? { thumbs, index: Math.min(v.index, thumbs.length - 1) } : null
-    })
-  }
+  // matches as they are now: one that was removed from the event is gone from the results too
+  const inEvent = new Map(event.media.map((t) => [t.id, t]))
+  const matches = results?.flatMap((t) => inEvent.get(t.id) ?? [])
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'moments', label: 'Moments' },
     { id: 'highlights', label: 'Highlights' },
+    { id: 'favorites', label: `${term('selects', event.mode)} · ${event.favorites.length}` },
     { id: 'clips', label: term('clips', event.mode) },
     { id: 'unsorted', label: `Unsorted · ${event.unsorted}` },
   ]
@@ -192,38 +204,30 @@ export default function PersonalEvent({ event, tracked = false }: { event: Event
         </>
       }
     >
-      {editing && <EditEventModal event={event} onClose={() => setEditing(false)} />}
+      {editing && <EditEventModal event={event} tracked={tracked} onClose={() => setEditing(false)} />}
       {/* a photo opened from this window covers it; closing the photo comes back here */}
-      {all && !viewing && (
-        <Modal wide title={`${all.moment} · ${count(all.count, 'photo')}`} onClose={() => setAllOf(null)}>
+      {all && !viewer.isOpen && (
+        <Modal wide title={`${all.moment} · ${mediaCount(all.photos, all.videos)}`} onClose={() => setAllOf(null)}>
           <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-6">
             {all.thumbs.map((thumb, i) => (
-              <Tile key={thumb.id} thumbs={all.thumbs} index={i} open={open} className="aspect-square w-full" />
+              <Tile key={thumb.id} thumbs={all.thumbs} index={i} open={viewer.open} className="aspect-square w-full" />
             ))}
           </div>
         </Modal>
       )}
-      {viewing && (
-        <PhotoViewer
-          thumbs={viewing.thumbs}
-          index={viewing.index}
-          onIndex={(index) => setViewing({ thumbs: viewing.thumbs, index })}
-          onClose={() => setViewing(null)}
-          onRemove={remove}
-        />
-      )}
+      {viewer.element}
       <Notice>{search.error}</Notice>
-      {results && (
+      {matches && (
         <section className={`${card} mb-6 p-4`}>
           <div className="flex items-baseline justify-between">
-            <h2 className="font-semibold">Best matches</h2>
+            <h2 className="font-semibold">{matches.length === 0 ? 'No matches' : 'Best matches'}</h2>
             <button type="button" className="text-sm underline" onClick={() => setResults(null)}>
               Clear
             </button>
           </div>
           <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
-            {results.map((thumb, i) => (
-              <Tile key={thumb.id} thumbs={results} index={i} open={open} className="aspect-square w-full" />
+            {matches.map((thumb, i) => (
+              <Tile key={thumb.id} thumbs={matches} index={i} open={viewer.open} className="aspect-square w-full" />
             ))}
           </div>
         </section>
@@ -265,9 +269,10 @@ export default function PersonalEvent({ event, tracked = false }: { event: Event
         <div className="space-y-9">
           {!empty && (
             <>
-              {tab === 'moments' && <Moments event={event} open={open} onViewAll={setAllOf} />}
-              {(tab === 'moments' || tab === 'highlights') && <Highlights event={event} open={open} />}
-              {(tab === 'moments' || tab === 'clips') && <Clips event={event} />}
+              {tab === 'moments' && <Moments event={event} open={viewer.open} onViewAll={setAllOf} />}
+              {(tab === 'moments' || tab === 'highlights') && <Highlights event={event} open={viewer.open} />}
+              {tab === 'favorites' && <Favorites event={event} open={viewer.open} />}
+              {((tab === 'moments' && event.videos > 0) || tab === 'clips') && <Clips event={event} open={viewer.open} />}
               {tab === 'unsorted' && (
                 <section>
                   <p className="text-sm text-neutral-600">
@@ -277,12 +282,13 @@ export default function PersonalEvent({ event, tracked = false }: { event: Event
                   </p>
                   {event.unsorted > 0 && (
                     <p className="mt-1 text-sm font-semibold">
-                      To sort them, click Edit list and add a theme or subject that fits, e.g. "Band on stage".
+                      {event.moments.length > 0 && 'Know where one belongs? Open it and pick its moment from the menu at the top. '}
+                      To sort many at once, click Edit list and add a theme or subject that fits, e.g. "Band on stage".
                     </p>
                   )}
                   <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
                     {event.unsortedThumbs.map((thumb, i) => (
-                      <Tile key={thumb.id} thumbs={event.unsortedThumbs} index={i} open={open} className="aspect-square w-full" />
+                      <Tile key={thumb.id} thumbs={event.unsortedThumbs} index={i} open={viewer.open} className="aspect-square w-full" />
                     ))}
                   </div>
                 </section>
@@ -293,7 +299,7 @@ export default function PersonalEvent({ event, tracked = false }: { event: Event
         </div>
 
         <aside className="space-y-4">
-          <CoverageCard event={event} />
+          <CoverageCard event={event} onOpen={viewer.open} />
           <OwlCard event={event} />
           <div className={`${panel} flex gap-3 p-4`}>
             <Owl className="h-8 w-8 shrink-0" />
@@ -310,9 +316,15 @@ export default function PersonalEvent({ event, tracked = false }: { event: Event
                 ))}
               </select>
               {moment && moment.refs.length > 0 && (
-                <div className="mt-2 grid grid-cols-4 gap-1.5">
+                <div className="mt-3 grid grid-cols-4 gap-2">
                   {moment.refs.map((thumb) => (
-                    <Thumb key={thumb.id} thumb={thumb} className="aspect-square w-full rounded-md" />
+                    <RemovableThumb
+                      key={thumb.id}
+                      thumb={thumb}
+                      label="Remove this example photo"
+                      disabled={examples.busy}
+                      onRemove={() => examples.run(() => removeExample(event.id, thumb))}
+                    />
                   ))}
                 </div>
               )}

@@ -16,6 +16,7 @@ export type TermKey =
   | 'rollA'
   | 'rollB'
   | 'clips'
+  | 'select'
   | 'selects'
   | 'coverage'
   | 'checklistTitle'
@@ -39,6 +40,7 @@ const TERMS: Record<TermKey, Record<Mode, string>> = {
   rollA: { personal: 'Talking clips', pro: 'A-roll' },
   rollB: { personal: 'Scenery clips', pro: 'B-roll' },
   clips: { personal: 'Talking & scenery clips', pro: 'A-roll / B-roll' },
+  select: { personal: 'Favorite', pro: 'Select' },
   selects: { personal: 'Favorites', pro: 'Selects' },
   coverage: { personal: 'Missed moments', pro: 'Coverage' },
   // heading of the checklist card; 'coverage' stays the name of the check itself inside sentences

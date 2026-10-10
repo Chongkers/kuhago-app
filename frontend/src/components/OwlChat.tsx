@@ -31,6 +31,11 @@ function stored(eventId: number | undefined): Message[] {
   }
 }
 
+// After an event is deleted: its id may be given to the next event, which must not open on this chat.
+export function forgetChat(eventId: number) {
+  store(eventId, [])
+}
+
 function store(eventId: number | undefined, messages: Message[]) {
   if (eventId === undefined) return
   try {
@@ -44,7 +49,7 @@ function store(eventId: number | undefined, messages: Message[]) {
 // Chat with the local assistant about one event. A failure is shown as its reply so the person knows
 // why nothing came back.
 export function useOwlChat(event?: EventView) {
-  const { model } = usePrefs()
+  const { model, replyLanguage } = usePrefs()
   const eventId = event?.id
   const [chat, setChat] = useState({ eventId, messages: stored(eventId) })
   const [busy, setBusy] = useState(false)
@@ -68,7 +73,7 @@ export function useOwlChat(event?: EventView) {
     add(eventId, { from: 'you', text: prompt })
     setBusy(true)
     try {
-      const { reply, moments, photos } = await askOwl(eventId, history, model)
+      const { reply, moments, photos } = await askOwl(eventId, history, model, replyLanguage)
       add(eventId, { from: 'owl', text: reply, moments, photos })
     } catch (e) {
       add(eventId, { from: 'owl', text: (e as Error).message, failed: true })

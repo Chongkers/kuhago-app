@@ -46,6 +46,7 @@ def plan_export(con: sqlite3.Connection, event_id: int) -> dict:
         sorted_ = [m for m in photos if (m["moment"] or config.UNSORTED) != config.UNSORTED]
         pairs = [
             *((m["path"], "Highlights") for m in photos if m["is_highlight"]),
+            *((m["path"], "Favorites") for m in media if m["is_select"]),
             *((m["path"], f"Moments/{moment(m)}") for m in sorted_),
             *((m["path"], "Videos/Talking") for m in videos if m["roll"] == "A"),
             *((m["path"], "Videos/Scenery") for m in videos if m["roll"] != "A"),

@@ -36,9 +36,20 @@ class Message(BaseModel):
     content: str
 
 
+Language = Literal["auto", "english", "filipino", "taglish"]
+# auto is what the model does best; the others are the user's choice in Settings
+_REPLY_IN = {
+    "auto": "Reply in the language the user writes in (English, Filipino or Taglish).",
+    "english": "Always reply in English, whatever language the user writes in.",
+    "filipino": "Always reply in Filipino (Tagalog), whatever language the user writes in.",
+    "taglish": "Always reply in Taglish, the everyday mix of Tagalog and English, whatever language the user writes in.",
+}
+
+
 class AskIn(BaseModel):
     messages: list[Message] = Field(min_length=1)
     model: str | None = None
+    language: Language = "auto"
 
 
 @router.get("/owl/status")
@@ -51,11 +62,11 @@ def owl_status():
     return {**out, "connected": True, "models": [m["name"] for m in tags.get("models", []) if "name" in m]}
 
 
-def _facts(event_id: int) -> tuple[str, list[str], int]:
+def _facts(event_id: int, language: Language = "auto") -> tuple[str, list[str], int]:
     """What the assistant is told about an event, the moments already on its list, and how many photos and
     videos it has."""
     with closing(db.connect()) as con:
-        ev = con.execute("SELECT name, event_type, date, venue FROM events WHERE id = ?", (event_id,)).fetchone()
+        ev = con.execute("SELECT mode, name, event_type, date, venue FROM events WHERE id = ?", (event_id,)).fetchone()
         if not ev:
             raise HTTPException(404, "event not found")
         media = con.execute(
@@ -73,9 +84,16 @@ def _facts(event_id: int) -> tuple[str, list[str], int]:
     tags = _top_tags(db.load_embeddings(event_id)[rows]) if rows else []
     lines = [
         "You are the assistant in KuhaGo, a photo organizer that runs offline on the user's laptop.",
-        "Be helpful and specific. Answer in short, plain sentences. You can't see the photos yourself: go by the"
-        " facts below, and never make up what is in a photo. You may write captions, notes, summaries and tips"
-        " for shooting or sorting. You can't move, rename, delete or copy files.",
+        "You are talking with a professional photographer about a client's event: be brief and practical."
+        if ev["mode"] == "pro"
+        else "You are talking with someone sorting the photos of their own family or friends' event: be warm and simple.",
+        "Be helpful and specific: name the moments and numbers from the facts below. Write plain text: no markdown, no headings, no asterisks."
+        f" {_REPLY_IN[language]}",
+        "You can't see the photos yourself: go by the facts below, and never make up what is in a photo, a name"
+        " or a number. If the facts don't answer the question, say so. You may write captions, notes, summaries"
+        " and tips for shooting or sorting. You can't move, rename, delete or copy files.",
+        "In this chat the user can also ask KuhaGo to find photos (\"find the cake cutting\") or to suggest moments"
+        " to add (\"suggest themes\"). Point them there when it helps.",
         f"Event: {ev['name']}" + (f" ({details})" if details else ""),
         f"In the event: {photos} photos and {len(media) - photos} videos",
         "Photos and videos per moment (how KuhaGo sorted them; Unsorted fit no moment): " + ", ".join(counts),
@@ -98,7 +116,8 @@ def _chat(model: str, messages: list[dict], timeout: float = config.OLLAMA_TIMEO
     """One answer from Ollama. Every way it can fail becomes a plain sentence for the UI."""
     slow = HTTPException(504, "KuhaGo took too long to answer. Try again, or pick a smaller model.")
     try:
-        body = {"model": model, "messages": messages, "stream": False, **options}
+        opts = {**config.OLLAMA_OPTIONS, **(options.pop("options", None) or {})}
+        body = {"model": model, "messages": messages, "stream": False, "keep_alive": config.OLLAMA_KEEP_ALIVE, "options": opts, **options}
         return _ollama("/api/chat", body, timeout=timeout)["message"]["content"]
     except urllib.error.HTTPError as err:  # Ollama is up but refused
         if err.code == 404:
@@ -288,14 +307,15 @@ def suggest_moments(event_id: int, body: SuggestIn):
 
 # What the user's message has to mention for the reply to carry moments to add, or photos to show.
 _WANTS_MOMENTS = re.compile(
-    r"\b(theme|subject|moment|categor|album|folder|shot ?list|checklist|sort|organi[sz]e|group (them|the|these|my)|add)", re.I
+    r"\b(theme|subject|moment|categor|album|folder|shot ?list|checklist|sort|organi[sz]e|group (them|the|these|my)|add|tema|kategorya|ayusin|idagdag)", re.I
 )
 _WANTS_PHOTOS = re.compile(
-    r"\b(find|show|search|look for|where (is|are)|which (photos?|pictures?|shots?)|(photos?|pictures?|shots?) (of|with))\b", re.I
+    r"\b(find|show|search|look (for|up)|(pa)?hanap\w*|i?pakita|nasaan|saan (ang|yung|ung)|where (is|are)|which (photos?|pictures?|shots?)|(photos?|pictures?|shots?) (of|with))\b", re.I
 )
 _FIND_LEAD = re.compile(
-    r"^\W*(please\s+|can you\s+|could you\s+)?(find|show|search( for)?|look for|where (is|are))\s+(me\s+)?"
-    r"((all|any|the|my|some)\s+)*((photos?|pictures?|pics|shots?|videos?)\s+)?((of|with|where|that show)\s+)?",
+    r"^\W*(please\s+|pa\s*|can you\s+|could you\s+)?(find|show|search( for)?|look (for|up)|where (is|are)|hanapin|hanap|i?pakita|nasaan)"
+    r"\s+((me|mo|nga|naman|po)\s+)*((all|any|the|my|some|ang|yung|ung|mga)\s+)*"
+    r"((photos?|pictures?|pics|shots?|videos?|litrato)\s+)?((of|with|where|that show|ng|sa)\s+)?",
     re.I,
 )
 
@@ -311,8 +331,10 @@ def ask(event_id: int, body: AskIn):
     """One reply about an event. When the user asks for themes or moments it also carries names they can add
     with a click; when they ask to find something, it is the photos CLIP matches. Nothing is saved here."""
     model = body.model or config.OLLAMA_MODEL
-    facts, have, media = _facts(event_id)
+    facts, have, media = _facts(event_id, body.language)
     history = [m.model_dump() for m in body.messages[-config.OWL_HISTORY_MESSAGES :]]
+    while len(history) > 1 and sum(len(m["content"]) for m in history) > config.OWL_HISTORY_CHARS:
+        history.pop(0)  # long replies would push the facts out of num_ctx
     asked = body.messages[-1].content if body.messages[-1].role == "user" else ""
 
     wants_moments = bool(_WANTS_MOMENTS.search(asked))
@@ -322,6 +344,7 @@ def ask(event_id: int, body: AskIn):
         reply = "These are the closest matches KuhaGo's image search found. The best ones come first, so check the last few."
         return {"reply": reply, "moments": [], "photos": photos}
     if not wants_moments:
+        facts += "\nAnswer in two to four short sentences unless the user asks for more."
         return {"reply": _chat(model, [{"role": "system", "content": facts}, *history]), "moments": [], "photos": []}
 
     # names only: the captions CLIP needs are written when a moment is added (visible_prompts). Asked for both

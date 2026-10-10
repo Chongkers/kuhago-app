@@ -27,6 +27,13 @@ export function count(n: number, unit: string): string {
   return `${n.toLocaleString('en-US')} ${unit}${n === 1 ? '' : 's'}`
 }
 
+// "12 photos", "2 videos" or "12 photos · 2 videos": a moment holds both, so a count never calls a video a photo.
+export function mediaCount(photos: number, videos: number, joiner = ' · ', units: [string, string] = ['photo', 'video']): string {
+  if (videos === 0) return count(photos, units[0])
+  if (photos === 0) return count(videos, units[1])
+  return `${count(photos, units[0])}${joiner}${count(videos, units[1])}`
+}
+
 export function listOf(items: string[]): string {
   return LIST.format(items)
 }

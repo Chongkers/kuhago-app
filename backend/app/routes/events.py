@@ -1,4 +1,5 @@
 import json
+import shutil
 from contextlib import closing
 from typing import Annotated, Literal
 
@@ -6,7 +7,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, StringConstraints
 
 from app import config, db
-from app.routes.ingest import reclassify
+from app.routes.ingest import organizing, reclassify
 
 router = APIRouter()
 
@@ -81,6 +82,8 @@ def create_event(body: EventIn):
         event_id = con.execute(
             f"INSERT INTO events({', '.join(fields)}) VALUES ({', '.join('?' * len(fields))})", tuple(fields.values())
         ).lastrowid
+        # SQLite hands a freed id to the next event, which must not inherit a deleted one's emb.npy
+        shutil.rmtree(config.event_dir(event_id), ignore_errors=True)
         return _event_or_404(con, event_id)
 
 
@@ -93,6 +96,19 @@ def update_event(event_id: int, body: EventPatch):
                 f"UPDATE events SET {', '.join(f'{k} = ?' for k in fields)} WHERE id = ?", (*fields.values(), event_id)
             )
         return _event_or_404(con, event_id)
+
+
+@router.delete("/events/{event_id}")
+def delete_event(event_id: int):
+    """Forget the event: its rows and KuhaGo's own copies (previews, embeddings, example photos). The original
+    photos and videos, and anything already exported, are untouched."""
+    if organizing(event_id):
+        raise HTTPException(409, "This event is still being organized. Stop that first, or wait for it to finish.")
+    with closing(db.connect()) as con, con:
+        _event_or_404(con, event_id)
+        con.execute("DELETE FROM events WHERE id = ?", (event_id,))  # shot items, refs, media and finals cascade
+    shutil.rmtree(config.event_dir(event_id), ignore_errors=True)
+    return {"deleted": event_id}
 
 
 @router.get("/events/{event_id}/shot_items")

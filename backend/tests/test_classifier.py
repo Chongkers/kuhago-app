@@ -110,3 +110,17 @@ def test_single_moment_and_empty_inputs():
     assert moment == "Cake" and conf == pytest.approx(1)
     assert classifier.classify_moments(np.zeros((0, config.EMB_DIM), np.float32), ITEMS) == []
     assert classifier.classify_moments(e(0)[None], []) == [(config.UNSORTED, 0.0)]
+
+
+def test_clip_takes_the_moment_its_frames_vote_for(monkeypatch):
+    """Two cake close-ups and two crowd shots: averaged, the crowd's "a photo of people" wins and the clip went
+    Unsorted. Classified frame by frame, the close-ups carry it to Cake, and the best one stands for the clip."""
+    monkeypatch.setattr(config, "BACKGROUND_PROMPTS", ["axis:9"])
+    cake = [unit(0.6 * e(0) + 0.5 * e(9) + s * e(10 + i)) for i, s in enumerate((0.6, 0.7))]
+    crowd = [unit(0.6 * e(9) + 0.8 * e(20 + i)) for i in range(2)]
+    frames = np.stack([crowd[0], *cake, crowd[1]])
+    assert classifier.classify_moments(unit(frames.mean(0))[None], ITEMS)[0][0] == config.UNSORTED
+    moment, conf, best = classifier.classify_clip(frames, ITEMS)
+    assert (moment, best) == ("Cake", 1)
+    assert conf == pytest.approx(frames[1][0])
+    assert classifier.classify_clip(np.stack(crowd), ITEMS)[0] == config.UNSORTED

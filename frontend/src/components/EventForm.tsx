@@ -1,13 +1,14 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { createEvent, trackEvent, updateDetails, useEvents, type EventView } from '../api/data'
+import { createEvent, deleteEvent, trackEvent, updateDetails, useEvents, type EventView } from '../api/data'
 import { todayISO } from '../lib/format'
 import { useProfiles } from '../lib/profile'
 import { btnPrimary, btnSecondary, input } from '../lib/styles'
 import { BLANK, TEMPLATES, templateLabel } from '../lib/templates'
 import { term, type Mode } from '../lib/terms'
 import { useAction } from '../lib/useAction'
-import { Modal, Notice } from './ui'
+import { forgetChat } from './OwlChat'
+import { Confirm, Modal, Notice } from './ui'
 
 function Field({ label, className = '', children }: { label: string; className?: string; children: ReactNode }) {
   return (
@@ -160,10 +161,15 @@ export function NewEventModal({ mode, onClose }: { mode: Mode; onClose: () => vo
   )
 }
 
-// Change what was typed when the event or gig was made.
-export function EditEventModal({ event, onClose }: { event: EventView; onClose: () => void }) {
+// Change what was typed when the event or gig was made, or delete it.
+// tracked: an event shown in Events that is also a gig, so deleting it takes the gig with it.
+export function EditEventModal({ event, tracked = false, onClose }: { event: EventView; tracked?: boolean; onClose: () => void }) {
+  const navigate = useNavigate()
+  const { releaseEvent } = useProfiles()
   const { error, run } = useAction()
   const pro = event.mode === 'pro'
+  const noun = term('event', event.mode).toLowerCase()
+  const [deleting, setDeleting] = useState(false)
   const [name, setName] = useState(event.name)
   const [date, setDate] = useState(event.date)
   const [gig, setGig] = useState({ client: event.client ?? '', venue: event.venue ?? '', fee: event.fee != null ? String(event.fee) : '' })
@@ -184,8 +190,32 @@ export function EditEventModal({ event, onClose }: { event: EventView; onClose: 
     })
   }
 
+  async function remove() {
+    await deleteEvent(event.id)
+    releaseEvent(event.id)
+    forgetChat(event.id)
+    navigate('/')
+  }
+
+  if (deleting) {
+    return (
+      <Confirm title={`Delete ${event.name}?`} confirmLabel={`Delete ${noun}`} onConfirm={remove} onClose={() => setDeleting(false)}>
+        <p>
+          KuhaGo forgets this {noun}: its list, {term('refs', event.mode).toLowerCase()}, how its{' '}
+          {term('frame', event.mode)}s were sorted, and its chat.
+          {pro && ' It leaves the Tracker and Events.'}
+          {tracked && ' It is also a gig in the Tracker, and that goes too.'}
+        </p>
+        <p>
+          Your original photos and videos stay where they are, and so does anything you already exported. This can't be
+          undone, but you can make the {noun} again and organize the same folder.
+        </p>
+      </Confirm>
+    )
+  }
+
   return (
-    <Modal title={`Edit ${term('event', event.mode).toLowerCase()} details`} onClose={onClose}>
+    <Modal title={`Edit ${noun} details`} onClose={onClose}>
       <form onSubmit={submit} className="mt-4 space-y-5">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={`${term('event', event.mode)} name`}>
@@ -209,13 +239,18 @@ export function EditEventModal({ event, onClose }: { event: EventView; onClose: 
           </label>
         )}
         <Notice>{error}</Notice>
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className={btnSecondary}>
-            Cancel
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <button type="button" onClick={() => setDeleting(true)} className="text-sm font-medium underline">
+            Delete this {noun}…
           </button>
-          <button type="submit" disabled={busy} className={btnPrimary}>
-            {busy ? 'Saving…' : 'Save'}
-          </button>
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className={btnSecondary}>
+              Cancel
+            </button>
+            <button type="submit" disabled={busy} className={btnPrimary}>
+              {busy ? 'Saving…' : 'Save'}
+            </button>
+          </div>
         </div>
       </form>
     </Modal>

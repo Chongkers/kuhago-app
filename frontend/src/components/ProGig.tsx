@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   addExamples,
+  removeExample,
   setSidecarMode,
   setStatus,
   STATUSES,
@@ -10,7 +11,7 @@ import {
   type EventView,
   type SidecarMode,
 } from '../api/data'
-import { count, formatDate, peso } from '../lib/format'
+import { count, formatDate, mediaCount, peso } from '../lib/format'
 import { useMode } from '../lib/mode'
 import { backLink, btnPrimary, btnSecondary, card, panel } from '../lib/styles'
 import { templateLabel } from '../lib/templates'
@@ -18,9 +19,10 @@ import { rollLabel, term } from '../lib/terms'
 import { useAction } from '../lib/useAction'
 import CoverageCard from './CoverageCard'
 import { EditEventModal } from './EventForm'
+import { Tile, useEventViewer } from './EventViewer'
 import OrganizeCard from './OrganizeCard'
 import OwlCard from './OwlChat'
-import { Badge, ImagePicker, Notice, Thumb } from './ui'
+import { Badge, ImagePicker, Notice, RemovableThumb } from './ui'
 import { Page } from './Shell'
 
 export const SIDECAR_OPTIONS: { mode: SidecarMode; label: string; example: string }[] = [
@@ -106,6 +108,7 @@ function XmpPanel({ event }: { event: EventView }) {
 
 export default function ProGig({ event }: { event: EventView }) {
   const refs = useAction()
+  const viewer = useEventViewer(event)
   const { setMode } = useMode()
   const [editing, setEditing] = useState(false)
   const facts = [
@@ -147,6 +150,7 @@ export default function ProGig({ event }: { event: EventView }) {
         </button>
       </div>
       {editing && <EditEventModal event={event} onClose={() => setEditing(false)} />}
+      {viewer.element}
 
       <dl className={`${card} mt-5 grid grid-cols-2 divide-neutral-200 shadow-none sm:grid-cols-5 sm:divide-x`}>
         {facts.map((fact) => (
@@ -188,11 +192,17 @@ export default function ProGig({ event }: { event: EventView }) {
                 <div key={m.moment} className={`${card} p-3 shadow-none`}>
                   <div className="flex items-baseline justify-between gap-2">
                     <h3 className="font-semibold">{m.moment}</h3>
-                    <span className="text-xs text-neutral-600">{m.count} frames</span>
+                    <span className="shrink-0 text-xs text-neutral-600">{mediaCount(m.photos, m.videos, ' · ', ['frame', 'clip'])}</span>
                   </div>
-                  <div className="mt-2 grid grid-cols-4 gap-1.5">
+                  <div className="mt-3 grid grid-cols-4 gap-2">
                     {m.refs.map((thumb) => (
-                      <Thumb key={thumb.id} thumb={thumb} className="aspect-square w-full rounded-md" />
+                      <RemovableThumb
+                        key={thumb.id}
+                        thumb={thumb}
+                        label="Remove this reference"
+                        disabled={refs.busy}
+                        onRemove={() => refs.run(() => removeExample(event.id, thumb))}
+                      />
                     ))}
                     <ImagePicker
                       onFiles={(files) => refs.run(() => addExamples(event.id, m.shotItemId, files))}
@@ -214,17 +224,20 @@ export default function ProGig({ event }: { event: EventView }) {
                 <div key={roll} className={`${card} overflow-hidden shadow-none`}>
                   <div className="flex items-baseline justify-between bg-neutral-100 px-4 py-2.5">
                     <h3 className="font-semibold">
-                      {rollLabel(roll, event.mode)} · {event.clips[roll].count} clips
+                      {rollLabel(roll, event.mode)} · {count(event.clips[roll].length, 'clip')}
                     </h3>
                     <span className="text-xs text-neutral-600">{roll === 'A' ? 'speech' : 'scene'}</span>
                   </div>
                   <ul className="divide-y divide-neutral-200">
-                    {event.clips[roll].items.map((clip) => (
-                      <li key={clip.file} className="flex items-baseline justify-between gap-3 px-4 py-2.5">
-                        <span className="font-mono text-xs">{clip.file}</span>
-                        <span className="text-xs text-neutral-600">
-                          {clip.duration ? `${clip.moment} · ${clip.duration}` : clip.moment}
-                        </span>
+                    {event.clips[roll].map((clip, i) => (
+                      <li key={clip.id} className="flex items-center gap-3 px-4 py-2.5">
+                        <div className="w-24 shrink-0">
+                          <Tile thumbs={event.clips[roll]} index={i} open={viewer.open} className="aspect-video w-full" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate font-mono text-xs">{clip.name}</p>
+                          <p className="text-xs text-neutral-600">{clip.moment}</p>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -235,7 +248,7 @@ export default function ProGig({ event }: { event: EventView }) {
         </div>
 
         <aside className="space-y-4">
-          <CoverageCard event={event} />
+          <CoverageCard event={event} onOpen={viewer.open} />
           <OwlCard event={event} />
           <XmpPanel event={event} />
         </aside>
